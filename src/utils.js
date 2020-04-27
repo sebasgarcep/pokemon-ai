@@ -1,8 +1,22 @@
+const { Dex, BattlePokedex } = require('./simulator');
+
+/**
+ * Returns a Promise that resolves after a set number of milliseconds.
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function weightedRandomPicks(userCollection, { picks = 1, weights: userWeights } = {}) {
+/**
+ * Randomly samples with weights from an ordered collection.
+ * @template T
+ * @param {T[]} userCollection
+ * @param {*} options
+ * @returns {T[]}
+ */
+function sample(userCollection, { picks = 1, weights: userWeights } = {}) {
   const result = [];
   if (userCollection.length <= picks) { return userCollection; }
   let collection = userCollection;
@@ -21,7 +35,7 @@ function weightedRandomPicks(userCollection, { picks = 1, weights: userWeights }
     const value = Math.random();
     const total = weights.reduce((total, item) => total + item, 0);
     const threshold = total * value;
-    do { pos += 1; current += Number.parseInt(weights[pos], 10); } while (current < threshold);
+    do { pos += 1; current += weights[pos]; } while (current < threshold);
     result.push(collection[pos]);
     if (picks > 1) {
       collection = [...collection.slice(0, pos), ...collection.slice(pos + 1)];
@@ -31,5 +45,41 @@ function weightedRandomPicks(userCollection, { picks = 1, weights: userWeights }
   return result;
 }
 
+/**
+ * Gets the base species from the species name.
+ * @param {string} species
+ * @returns {string}
+ */
+function getBaseSpecies(species) {
+  const speciesId = Dex.getId(species);
+  const speciesData = BattlePokedex[speciesId];
+  return (speciesData && (speciesData.baseSpecies || speciesData.name)) || null;
+}
+
+/**
+ * Gets a species number.
+ * @param {string} species
+ * @returns {number}
+ */
+function getSpeciesNumber(species) {
+  const speciesId = Dex.getId(species);
+  const speciesData = BattlePokedex[speciesId];
+  return  (speciesData && speciesData.num) || null;
+}
+
+/**
+ * Gets a species number.
+ * @param {string} species
+ * @returns {string}
+ */
+function getSpeciesGender(species) {
+  const speciesId = Dex.getId(species);
+  const speciesData = BattlePokedex[speciesId];
+  return  (speciesData && speciesData.gender) || null;
+}
+
 module.exports.sleep = sleep;
-module.exports.weightedRandomPicks = weightedRandomPicks;
+module.exports.sample = sample;
+module.exports.getBaseSpecies = getBaseSpecies;
+module.exports.getSpeciesNumber = getSpeciesNumber;
+module.exports.getSpeciesGender = getSpeciesGender;
