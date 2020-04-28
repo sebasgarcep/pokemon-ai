@@ -11,7 +11,7 @@ const FieldState = require('./data-structures/FieldState');
 const Move = require('./data-structures/Move');
 const { Battle } = require('./simulator');
 const { formatid } = require('./constants');
-const { MoveAction, SwitchAction } = require('./data-structures/BattleAction');
+const { MoveAction, SwitchAction, PassAction } = require('./data-structures/BattleAction');
 
 /**
  * Battle simulator.
@@ -132,13 +132,25 @@ class BattleSimulator {
    */
   chooseAction(playerId, rivalId, request) {
     const player = this.getAgent(playerId);
+    const playerSide = this.getSide(playerId);
 
     const playerTeam = this.getPlayerTeam(playerId);
-    const playerActive = playerTeam
-      .filter(item => item.active)
-      .map((entity, index) => {
-        if (request.active[index].maxMoves) {
-          entity.maxMoves = this.getParsedMoves(request.active[index].maxMoves.maxMoves);
+    const playerActive = playerSide
+      .active
+      .map((active, index) => {
+        active.__cache__ = {};
+        active.__cache__.moves = request.active[index].moves;
+        active.__cache__.maxMoves = request.active[index].maxMoves && request.active[index].maxMoves.maxMoves;
+        return active;
+      })
+      .filter(active => active.isActive)
+      .map(active => {
+        /** @type {PokemonState} */
+        const entity = playerTeam.find(item => item.active && item.sharedBuild.name === active.name) || null;
+        if (!entity) { return null; }
+        entity.moves = this.getParsedMoves(active.__cache__.moves);
+        if (active.__cache__.maxMoves) {
+          entity.maxMoves = this.getParsedMoves(active.__cache__.maxMoves);
         } else {
           entity.maxMoves = [];
         }
@@ -195,6 +207,9 @@ class BattleSimulator {
       if (action instanceof SwitchAction) {
         side.chooseSwitch(action.outgoing.sharedBuild.name);
       }
+      if (action instanceof PassAction) {
+        side.choosePass();
+      }
     }
 
     this.commitDecisions();
@@ -204,9 +219,10 @@ class BattleSimulator {
     if (this.battle.allChoicesDone()) { this.battle.commitDecisions(); }
   }
 
-  getHealthValues(input) {
-    const [current, max] = input.split('/').map(item => Number.parseInt(item, 10));
-    return { current, max };
+  getSharedHP(pokemon) {
+    const { shared } = pokemon.getHealth();
+    const [current] = shared.replace(' ', '/').split('/').map(item => Number.parseInt(item, 10));
+    return { current, max: 48 };
   }
 
   /**
@@ -218,11 +234,10 @@ class BattleSimulator {
     const player = this.getAgent(playerId);
     const playerSide = this.getSide(playerId);
     return playerSide.pokemon.map(entity => {
-      const { secret, shared } = entity.getHealth();
       return new PokemonState(
         player.getPokemon(entity.speciesid),
-        this.getHealthValues(secret),
-        this.getHealthValues(shared),
+        { current: entity.hp, max: entity.maxhp },
+        this.getSharedHP(entity),
         entity.statusData,
         entity.volatiles,
         entity.boosts,
@@ -234,6 +249,11 @@ class BattleSimulator {
     });
   }
 
+  default(main, alternative) {
+    if (main === undefined || main === null) { return alternative; }
+    return main;
+  }
+
   /**
    * Transform moves to interface.
    * @param {any[]} moves
@@ -243,10 +263,10 @@ class BattleSimulator {
     return moves.map(item => {
       return new Move(
         item.id,
-        item.name,
-        { current: item.pp, max: item.maxpp },
-        item.target,
-        item.disabled,
+        item.move,
+        { current: this.default(item.pp, 1), max: this.default(item.maxpp, 1) },
+        this.default(item.target, 'normal'),
+        this.default(item.disabled, false),
       );
     });
   }
@@ -261,10 +281,9 @@ class BattleSimulator {
     const rivalSide = this.getSide(rivalId);
     return rivalSide.active.filter(entity => {
       const pokemon = rival.getPokemon(entity.speciesid);
-      const { shared } = entity.getHealth();
       return new SharedPokemonState(
         pokemon.getShared(),
-        this.getHealthValues(shared),
+        this.getSharedHP(entity),
         entity.statusData,
         entity.volatiles,
         entity.boosts,
