@@ -1,11 +1,13 @@
-// eslint-disable-next-line no-unused-vars
-const PokemonBuild = require('./data-structures/PokemonBuild');
-// eslint-disable-next-line no-unused-vars
-const PokemonPreview = require('./data-structures/PokemonPreview');
-// eslint-disable-next-line no-unused-vars
-const AbstractMatchupStrategy = require('./matchup-strategies/AbstractMatchupStrategy');
-// eslint-disable-next-line no-unused-vars
-const AbstractBattleStrategy = require('./battle-strategies/AbstractBattleStrategy');
+/**
+ * @typedef {import('./data-structures/PokemonBuild')} PokemonBuild
+ * @typedef {import('./data-structures/PokemonPreview')} PokemonPreview
+ * @typedef {import('./data-structures/PokemonState')} PokemonState
+ * @typedef {import('./data-structures/ActivePokemonState')} ActivePokemonState
+ * @typedef {import('./data-structures/SharedPokemonState')} SharedPokemonState
+ * @typedef {import('./data-structures/FieldState')} FieldState
+ * @typedef {import('./matchup-strategies/AbstractMatchupStrategy')} AbstractMatchupStrategy
+ * @typedef {import('./battle-strategies/AbstractBattleStrategy')} AbstractBattleStrategy
+ */
 
 /**
  * Agent capable of decision-making.
@@ -25,7 +27,7 @@ class Agent {
   }
 
   /**
-   * Returns
+   * Returns a matchup for a given rival team.
    * @param {PokemonPreview[]} rivalTeam
    * @returns {number[]}
    */
@@ -33,12 +35,27 @@ class Agent {
     return this.matchupStrategy.matchup(this.team, rivalTeam);
   }
 
+  /**
+   * Returns a choice for each active pokemon.
+   * @param {PokemonState[]} playerTeam
+   * @param {ActivePokemonState[]} playerActive
+   * @param {SharedPokemonState[]} rivalActive
+   * @param {FieldState} field
+   */
   battle(playerTeam, playerActive, rivalActive, field) {
     return this.battleStrategy.battle(playerTeam, playerActive, rivalActive, field);
   }
 
-  switch(playerTeam, switches) {
-    return this.battleStrategy.switch(playerTeam, switches);
+  /**
+   * Returns a choice for each active pokemon.
+   * @param {PokemonState[]} playerTeam
+   * @param {ActivePokemonState[]} playerActive
+   * @param {SharedPokemonState[]} rivalActive
+   * @param {FieldState} field
+   * @param {boolean[]} switches
+   */
+  forceSwitch(playerTeam, playerActive, rivalActive, field, switches) {
+    return this.battleStrategy.forceSwitch(playerTeam, playerActive, rivalActive, field, switches);
   }
 }
 

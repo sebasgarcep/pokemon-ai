@@ -1,9 +1,14 @@
 /* eslint-disable no-unused-vars */
 
 /**
- * @typedef {import('../data-structures/BattleAction')} BattleAction
+ * @typedef {import('../data-structures/BattleAction').BattleAction} BattleAction
+ * @typedef {import('../data-structures/BattleAction').SwitchAction} SwitchAction
  * @typedef {import('../data-structures/PokemonBuild')} PokemonBuild
  * @typedef {import('../data-structures/PokemonPreview')} PokemonPreview
+ * @typedef {import('../data-structures/PokemonState')} PokemonState
+ * @typedef {import('../data-structures/ActivePokemonState')} ActivePokemonState
+ * @typedef {import('../data-structures/SharedPokemonState')} SharedPokemonState
+ * @typedef {import('../data-structures/FieldState')} FieldState
  */
 
 /**
@@ -14,10 +19,10 @@ class AbstractBattleStrategy {
   /**
    * Makes a choice about what to do in battle.
    * @abstract
-   * @param {*} playerTeam FIXME: SIGNATURE MISSING
-   * @param {*} playerActive FIXME: SIGNATURE MISSING
-   * @param {*} rivalActive FIXME: SIGNATURE MISSING
-   * @param {*} field FIXME: SIGNATURE MISSING
+   * @param {PokemonState[]} playerTeam
+   * @param {ActivePokemonState[]} playerActive
+   * @param {SharedPokemonState[]} rivalActive
+   * @param {FieldState} field
    * @returns {BattleAction[]}
    */
   battle(playerTeam, playerActive, rivalActive, field) {
@@ -27,11 +32,14 @@ class AbstractBattleStrategy {
   /**
    * Makes a choice about which Pokemon to bring out when a switch is forced.
    * @abstract
-   * @param {*} playerTeam FIXME: SIGNATURE MISSING
-   * @param {*} switches FIXME: SIGNATURE MISSING
-   * @returns {BattleAction[]}
+   * @param {PokemonState[]} playerTeam
+   * @param {ActivePokemonState[]} playerActive
+   * @param {SharedPokemonState[]} rivalActive
+   * @param {FieldState} field
+   * @param {boolean[]} switches
+   * @returns {SwitchAction[]}
    */
-  forceSwitch(playerTeam, switches) {
+  forceSwitch(playerTeam, playerActive, rivalActive, field, switches) {
     throw new Error('Not implemented.');
   }
 }

@@ -1,20 +1,14 @@
 /**
- * @typedef {Object} Spread
- * @property {number} hp
- * @property {number} atk
- * @property {number} def
- * @property {number} spa
- * @property {number} spd
- * @property {number} spe
+ * @typedef {import('./typedefs').Spread} Spread
  */
 
-const { getBaseSpecies } = require('../utils');
+const SharedPokemonBuild = require('./SharedPokemonBuild');
 
 /**
  * Details a Pokemon build (e.g. EVs, nature, items, etc.)
  * @public
  */
-class PokemonBuild {
+class PokemonBuild extends SharedPokemonBuild {
   /**
    * Creates a Pokemon Build.
    * @param {string} name
@@ -29,18 +23,31 @@ class PokemonBuild {
    * @param {boolean} shiny
    * @param {string} nature
    */
-  constructor(name, species, gender, moves, ability, evs, ivs, item, level, shiny, nature) {
-    this.name = name;
-    this.baseSpecies = getBaseSpecies(species);
-    this.species = species;
-    this.gender = gender;
+  constructor(
+    name,
+    species,
+    gender,
+    moves,
+    ability,
+    evs,
+    ivs,
+    item,
+    level,
+    shiny,
+    nature
+  ) {
+    super(
+      name,
+      species,
+      gender,
+      level,
+      shiny,
+    );
     this.moves = moves;
     this.ability = ability;
     this.evs = evs;
     this.ivs = ivs;
     this.item = item;
-    this.level = level;
-    this.shiny = shiny;
     this.nature = nature;
   }
 }

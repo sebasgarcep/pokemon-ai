@@ -1,3 +1,5 @@
+const { getBaseSpecies } = require('../utils');
+
 /**
  * Holds preview information visible to the opposing user during Team Preview.
  * @public
@@ -5,11 +7,11 @@
 class PokemonPreview {
   /**
    *  Creates a Pokemon Preview.
-   *  @param {string} baseSpecies
+   *  @param {string} species
    *  @param {string} gender
    */
-  constructor(baseSpecies, gender) {
-    this.baseSpecies = baseSpecies;
+  constructor(species, gender) {
+    this.baseSpecies = getBaseSpecies(species);
     this.gender = gender;
   }
 }
