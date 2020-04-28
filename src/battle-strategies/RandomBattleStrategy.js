@@ -8,7 +8,6 @@
  * @typedef {import('../data-structures/FieldState')} FieldState
  */
 
-
 const AbstractBattleStrategy = require('./AbstractBattleStrategy');
 const { SwitchAction } = require('../data-structures/BattleAction');
 const { MoveAction } = require('../data-structures/BattleAction');
@@ -28,7 +27,7 @@ class RandomBattleStrategy extends AbstractBattleStrategy {
       if (!entity) { return null; }
       const [details] = sample(entity.moves.filter((item) => !item.disabled && item.pp.current > 0));
       const target = ['normal', 'any'].includes(details.target) ? 1 : 0;
-      return new MoveAction(details.move, target);
+      return new MoveAction(details, target);
     });
   }
 
@@ -46,7 +45,7 @@ class RandomBattleStrategy extends AbstractBattleStrategy {
     return playerTeam
       .filter(entity => !entity.active && entity.hp.current > 0)
       .slice(0, numSwitches)
-      .map(entity => new SwitchAction(entity.build.species));
+      .map(entity => new SwitchAction(entity));
   }
 }
 

@@ -190,10 +190,10 @@ class BattleSimulator {
 
     for (const action of actions) {
       if (action instanceof MoveAction) {
-        side.chooseMove(action.move, action.target);
+        side.chooseMove(action.move.id, action.target);
       }
       if (action instanceof SwitchAction) {
-        side.chooseSwitch(action.outgoing);
+        side.chooseSwitch(action.outgoing.sharedBuild.name);
       }
     }
 
@@ -243,6 +243,7 @@ class BattleSimulator {
     return moves.map(item => {
       return new Move(
         item.id,
+        item.name,
         { current: item.pp, max: item.maxpp },
         item.target,
         item.disabled,
