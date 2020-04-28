@@ -36,16 +36,18 @@ class BattleSimulator {
     };
   }
 
-  start() {
-    this.battle = new Battle(this.options);
-    const win = this.battle.win.bind(this.battle);
-    this.battle.win = (...args) => {
-      const side = args[0];
-      console.log('win', side.id);
-      return win(...args);
-    };
-    this.battle.setPlayer('p1', { team: this.p1.team });
-    this.battle.setPlayer('p2', { team: this.p2.team });
+  run() {
+    return new Promise((resolve) => {
+      this.battle = new Battle(this.options);
+      const win = this.battle.win.bind(this.battle);
+      this.battle.win = (...args) => {
+        const side = args[0];
+        resolve(side.id);
+        return win(...args);
+      };
+      this.battle.setPlayer('p1', { team: this.p1.team });
+      this.battle.setPlayer('p2', { team: this.p2.team });
+    });
   }
 
   sendRequest(type, data) {

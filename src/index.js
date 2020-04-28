@@ -12,20 +12,25 @@ async function start() {
   const metaGen = new MetaTeamGenerator();
   await metaGen.init();
 
-  const p1 = new Agent(
-    randomGen.generateTeam(),
-    new RandomMatchupStrategy(),
-    new RandomBattleStrategy()
-  );
+  let index = 0;
+  while (true) {
+    const p1 = new Agent(
+      randomGen.generateTeam(),
+      new RandomMatchupStrategy(),
+      new RandomBattleStrategy()
+    );
 
-  const p2 = new Agent(
-    metaGen.generateTeam(),
-    new RandomMatchupStrategy(),
-    new RandomBattleStrategy()
-  );
+    const p2 = new Agent(
+      metaGen.generateTeam(),
+      new RandomMatchupStrategy(),
+      new RandomBattleStrategy()
+    );
 
-  const simulator = new BattleSimulator(p1, p2);
-  simulator.start();
+    const simulator = new BattleSimulator(p1, p2);
+    const winner = await simulator.run();
+    index += 1;
+    console.log(index, winner);
+  }
 }
 
 start();
