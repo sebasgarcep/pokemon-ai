@@ -34,8 +34,15 @@ class SwitchAction {
 }
 
 /**
- * @typedef {MoveAction | SwitchAction} BattleAction
+ * Nothing to do.
+ * @public
+ */
+class PassAction {}
+
+/**
+ * @typedef {MoveAction | SwitchAction | PassAction} BattleAction
  */
 
 module.exports.MoveAction = MoveAction;
 module.exports.SwitchAction = SwitchAction;
+module.exports.PassAction = PassAction;
