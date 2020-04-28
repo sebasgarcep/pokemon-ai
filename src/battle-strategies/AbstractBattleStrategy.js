@@ -3,6 +3,7 @@
 /**
  * @typedef {import('../data-structures/BattleAction').BattleAction} BattleAction
  * @typedef {import('../data-structures/BattleAction').SwitchAction} SwitchAction
+ * @typedef {import('../data-structures/BattleAction').PassAction} PassAction
  * @typedef {import('../data-structures/PokemonState')} PokemonState
  * @typedef {import('../data-structures/SharedPokemonState')} SharedPokemonState
  * @typedef {import('../data-structures/FieldState')} FieldState
@@ -34,7 +35,7 @@ class AbstractBattleStrategy {
    * @param {SharedPokemonState[]} rivalActive
    * @param {FieldState} field
    * @param {boolean[]} switches
-   * @returns {SwitchAction[]}
+   * @returns {(SwitchAction | PassAction)[]}
    */
   forceSwitch(playerTeam, playerActive, rivalActive, field, switches) {
     throw new Error('Not implemented.');
