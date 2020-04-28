@@ -137,7 +137,11 @@ class BattleSimulator {
     const playerActive = playerTeam
       .filter(item => item.active)
       .map((entity, index) => {
-        entity.maxMoves = this.getParsedMoves(request.active[index].maxMoves.maxMoves);
+        if (request.active[index].maxMoves) {
+          entity.maxMoves = this.getParsedMoves(request.active[index].maxMoves.maxMoves);
+        } else {
+          entity.maxMoves = [];
+        }
         return entity;
       });
     const rivalActive = this.getRivalActivePokemon(rivalId);
