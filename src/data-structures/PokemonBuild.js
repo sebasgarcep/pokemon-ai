@@ -50,6 +50,16 @@ class PokemonBuild extends SharedPokemonBuild {
     this.item = item;
     this.nature = nature;
   }
+
+  getShared() {
+    return new SharedPokemonBuild(
+      this.name,
+      this.species,
+      this.gender,
+      this.level,
+      this.shiny,
+    );
+  }
 }
 
 module.exports = PokemonBuild;

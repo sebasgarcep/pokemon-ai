@@ -1,12 +1,17 @@
 /**
  * @typedef {import('./Agent')} Agent
  * @typedef {import('./simulator').Side} Side
+ * @typedef {import('./data-structures/BattleAction').BattleAction} BattleAction
  */
 
 const PokemonPreview = require('./data-structures/PokemonPreview');
+const PokemonState = require('./data-structures/PokemonState');
+const SharedPokemonState = require('./data-structures/SharedPokemonState');
+const FieldState = require('./data-structures/FieldState');
+const Move = require('./data-structures/Move');
 const { Battle } = require('./simulator');
 const { formatid } = require('./constants');
-const { MoveAction } = require('./data-structures/BattleAction');
+const { MoveAction, SwitchAction } = require('./data-structures/BattleAction');
 
 /**
  * Battle simulator.
@@ -33,8 +38,37 @@ class BattleSimulator {
 
   start() {
     this.battle = new Battle(this.options);
+    const win = this.battle.win.bind(this.battle);
+    this.battle.win = (...args) => {
+      const side = args[0];
+      console.log('win', side.id);
+      return win(...args);
+    };
     this.battle.setPlayer('p1', { team: this.p1.team });
     this.battle.setPlayer('p2', { team: this.p2.team });
+  }
+
+  sendRequest(type, data) {
+    if (type !== 'sideupdate') { console.log('Unrecognized', type, data); return; }
+    const playerId = data[0];
+    const rivalId = playerId === 'p1' ? 'p2' : 'p1';
+    const message = data[1];
+    if (message.startsWith('|error|')) { throw new Error(message.replace('|error|')); }
+    const request = JSON.parse(message.replace('|request|', ''));
+    process.nextTick(() => {
+      if (request.teamPreview) {
+        this.teamPreview(playerId, rivalId);
+      } else if (request.forceSwitch) {
+        this.forceSwitch(playerId, rivalId, request);
+      } else if (request.active) {
+        this.chooseAction(playerId, rivalId, request);
+      } else if (request.wait) {
+        // pass
+      } else {
+        console.log(request);
+        throw new Error('This should never happen.');
+      }
+    });
   }
 
   /**
@@ -74,52 +108,92 @@ class BattleSimulator {
     return this.battle.getSide(id);
   }
 
-  sendRequest(type, data) {
-    if (type !== 'sideupdate') { console.log('Unrecognized', type, data); return; }
-    const playerId = data[0];
-    const rivalId = playerId === 'p1' ? 'p2' : 'p1';
-    const message = data[1];
-    if (message.startsWith('|error|')) { throw new Error(message.replace('|error|')); }
+  /**
+   * Generates a matchup for this pair.
+   * @param {string} playerId
+   * @param {string} rivalId
+   */
+  teamPreview(playerId, rivalId) {
     const player = this.getAgent(playerId);
     const rival = this.getAgent(rivalId);
     const playerSide = this.getSide(playerId);
-    const rivalSide = this.getSide(rivalId);
-    const request = JSON.parse(message.replace('|request|', ''));
-    process.nextTick(() => {
-      if (request.teamPreview) {
-        const matchup = this.getStringMatchup(player, rival);
-        playerSide.chooseTeam(matchup);
-        this.commitDecisions();
-      } else if (request.forceSwitch) {
-        // pass
-        const actions = player.switch(
-          request.side.pokemon,
-          request.forceSwitch,
-        );
-      } else if (request.wait) {
-        // pass
-      } else if (request.active) {
-        const actions = player.battle(
-          request.side.pokemon,
-          request.active.map((item, index) => {
-            return { ...item, pokemon: this.getSecretPokemonDetails(playerSide.active[index]) };
-          }),
-          rivalSide.active.map((item) => {
-            return this.getSharedPokemonDetails(item);
-          }),
-          this.battle.field,
-        );
-        for (const action of actions) {
-          if (action instanceof MoveAction) {
-            playerSide.chooseMove(action.move, action.target);
-          }
-        }
-        this.commitDecisions();
-      } else {
-        console.log(request);
-        throw new Error('This should never happen.');
+
+    const matchup = this.getStringMatchup(player, rival);
+    playerSide.chooseTeam(matchup);
+
+    this.commitDecisions();
+  }
+
+  /**
+   * Choose an action for a player.
+   * @param {string} playerId
+   * @param {string} rivalId
+   * @param {any} request
+   */
+  chooseAction(playerId, rivalId, request) {
+    const player = this.getAgent(playerId);
+
+    const playerTeam = this.getPlayerTeam(playerId);
+    const playerActive = playerTeam
+      .filter(item => item.active)
+      .map((entity, index) => {
+        entity.maxMoves = this.getParsedMoves(request.active[index].maxMoves.maxMoves);
+        return entity;
+      });
+    const rivalActive = this.getRivalActivePokemon(rivalId);
+    const field = this.getField();
+
+    const actions = player.battle(
+      playerTeam,
+      playerActive,
+      rivalActive,
+      field,
+    );
+
+    this.choose(playerId, actions);
+  }
+
+  /**
+   * @param {string} playerId
+   * @param {string} rivalId
+   * @param {any} request
+   */
+  forceSwitch(playerId, rivalId, request) {
+    const player = this.getAgent(playerId);
+
+    const playerTeam = this.getPlayerTeam(playerId);
+    const playerActive = playerTeam.filter(item => item.active);
+    const rivalActive = this.getRivalActivePokemon(rivalId);
+    const field = this.getField();
+
+    const actions = player.forceSwitch(
+      playerTeam,
+      playerActive,
+      rivalActive,
+      field,
+      request.forceSwitch,
+    );
+
+    this.choose(playerId, actions);
+  }
+
+  /**
+   * @param {string} id
+   * @param {BattleAction[]} actions
+   */
+  choose(id, actions) {
+    const side = this.getSide(id);
+
+    for (const action of actions) {
+      if (action instanceof MoveAction) {
+        side.chooseMove(action.move, action.target);
       }
-    });
+      if (action instanceof SwitchAction) {
+        side.chooseSwitch(action.outgoing);
+      }
+    }
+
+    this.commitDecisions();
   }
 
   commitDecisions() {
@@ -131,31 +205,74 @@ class BattleSimulator {
     return { current, max };
   }
 
-  getSharedPokemonDetails(pokemon) {
-    const sharedHealth = this.getHealthValues(pokemon.getHealth().shared);
-    return {
-      forme: pokemon.forme,
-      species: pokemon.speciesid,
-      name: pokemon.name,
-      id: pokemon.id,
-      level: pokemon.level,
-      gender: pokemon.gender,
-      pokeball: pokemon.pokeball,
-      status: pokemon.status,
-      statusData: pokemon.statusData,
-      volatiles: pokemon.volatiles,
-      sharedHealth,
-    };
+  /**
+   * Obtain current player's team.
+   * @param {string} playerId
+   * @returns {PokemonState[]}
+   */
+  getPlayerTeam(playerId) {
+    const player = this.getAgent(playerId);
+    const playerSide = this.getSide(playerId);
+    return playerSide.pokemon.map(entity => {
+      const { secret, shared } = entity.getHealth();
+      return new PokemonState(
+        player.getPokemon(entity.speciesid),
+        this.getHealthValues(secret),
+        this.getHealthValues(shared),
+        entity.statusData,
+        entity.volatiles,
+        entity.boosts,
+        entity.isActive,
+        this.getParsedMoves(entity.moveSlots),
+        entity.canDynamax,
+        this.getParsedMoves(entity.moveSlots), // FIXME: what should we do about this ?
+      );
+    });
   }
 
-  getSecretPokemonDetails(pokemon) {
-    const shared = this.getSharedPokemonDetails(pokemon);
-    const health = this.getHealthValues(pokemon.getHealth().secret);
-    return {
-      ...shared,
-      health,
-      item: pokemon.item,
-    };
+  /**
+   * Transform moves to interface.
+   * @param {any[]} moves
+   * @returns {Move[]}
+   */
+  getParsedMoves(moves) {
+    return moves.map(item => {
+      return new Move(
+        item.id,
+        { current: item.pp, max: item.maxpp },
+        item.target,
+        item.disabled,
+      );
+    });
+  }
+
+  /**
+   * Obtain current rival's active pokemon.
+   * @param {string} rivalId
+   * @returns {SharedPokemonState[]}
+   */
+  getRivalActivePokemon(rivalId) {
+    const rival = this.getAgent(rivalId);
+    const rivalSide = this.getSide(rivalId);
+    return rivalSide.active.filter(entity => {
+      const pokemon = rival.getPokemon(entity.speciesid);
+      const { shared } = entity.getHealth();
+      return new SharedPokemonState(
+        pokemon.getShared(),
+        this.getHealthValues(shared),
+        entity.statusData,
+        entity.volatiles,
+        entity.boosts,
+      );
+    });
+  }
+
+  getField() {
+    return new FieldState(
+      this.battle.field.terrain,
+      this.battle.field.weather,
+      this.battle.field.pseudoWeather,
+    );
   }
 }
 

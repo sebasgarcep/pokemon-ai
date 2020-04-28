@@ -21,6 +21,17 @@
  */
 
 /**
+ * @typedef {Object} StatChanges
+ * @property {number} atk
+ * @property {number} def
+ * @property {number} spa
+ * @property {number} spd
+ * @property {number} spe
+ * @property {number} accuracy
+ * @property {number} evasion
+ */
+
+/**
  * @typedef {
  *  | 'all'
  *  | 'foeSide'

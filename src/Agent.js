@@ -9,6 +9,8 @@
  * @typedef {import('./battle-strategies/AbstractBattleStrategy')} AbstractBattleStrategy
  */
 
+const { Dex } = require('./simulator');
+
 /**
  * Agent capable of decision-making.
  * @public
@@ -56,6 +58,19 @@ class Agent {
    */
   forceSwitch(playerTeam, playerActive, rivalActive, field, switches) {
     return this.battleStrategy.forceSwitch(playerTeam, playerActive, rivalActive, field, switches);
+  }
+
+  /**
+   * Returns a Pokemon using its species to find it.
+   * @param {string} species
+   * @returns {PokemonBuild}
+   */
+  getPokemon(species) {
+    const speciesId = Dex.getId(species);
+    return this.team.find((entity) => {
+      const entitySpeciesId = Dex.getId(entity.species);
+      return entitySpeciesId === speciesId;
+    });
   }
 }
 

@@ -21,8 +21,10 @@ class MoveAction {
 class SwitchAction {
   /**
    * Creates a switch action.
+   * @param {string} outgoing
    */
-  constructor() {
+  constructor(outgoing) {
+    this.outgoing = outgoing;
   }
 }
 

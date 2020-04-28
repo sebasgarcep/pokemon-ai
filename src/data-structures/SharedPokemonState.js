@@ -1,6 +1,7 @@
 /**
  * @typedef {import('./typedefs').HP} HP
  * @typedef {import('./typedefs').Spread} Spread
+ * @typedef {import('./typedefs').StatChanges} StatChanges
  * @typedef {import('./SharedPokemonBuild')} SharedPokemonBuild
  */
 
@@ -14,7 +15,7 @@ class SharedPokemonState {
    * @param {HP} sharedHp
    * @param {any} status FIXME: missing signature
    * @param {any} volatiles FIXME: missing signature
-   * @param {Spread} statChanges
+   * @param {StatChanges} statChanges
    */
   constructor(
     sharedBuild,
