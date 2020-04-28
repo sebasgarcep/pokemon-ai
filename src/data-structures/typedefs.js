@@ -32,21 +32,7 @@
  */
 
 /**
- * @typedef {
- *  | 'all'
- *  | 'foeSide'
- *  | 'allySide'
- *  | 'allyTeam'
- *  | 'allAdjacent'
- *  | 'allAdjacentFoes'
- *  | 'allies'
- *  | 'adjacentFoe'
- *  | 'adjacentAlly'
- *  | 'normal'
- *  | 'randomNormal'
- *  | 'self'
- *  | 'any'
- * } TargetTypes
+ * @typedef {'all' | 'foeSide' | 'allySide' | 'allyTeam' | 'allAdjacent' | 'allAdjacentFoes' | 'allies' | 'adjacentFoe' | 'adjacentAlly' | 'normal' | 'randomNormal' | 'self' | 'any'} TargetTypes
  */
 
 module.exports = null;
