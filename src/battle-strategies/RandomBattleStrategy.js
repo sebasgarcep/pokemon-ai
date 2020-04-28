@@ -9,8 +9,7 @@
  */
 
 const AbstractBattleStrategy = require('./AbstractBattleStrategy');
-const { SwitchAction } = require('../data-structures/BattleAction');
-const { MoveAction } = require('../data-structures/BattleAction');
+const { MoveAction, SwitchAction, PassAction } = require('../data-structures/BattleAction');
 const { sample } = require('../utils');
 
 class RandomBattleStrategy extends AbstractBattleStrategy {
@@ -23,10 +22,24 @@ class RandomBattleStrategy extends AbstractBattleStrategy {
    */
   // eslint-disable-next-line no-unused-vars
   battle(playerTeam, playerActive, rivalActive, field) {
-    return playerActive.map(entity => {
-      if (!entity) { return null; }
-      const [details] = sample(entity.moves.filter((item) => !item.disabled && item.pp.current > 0));
-      const target = ['normal', 'any'].includes(details.target) ? 1 : 0;
+    return playerActive.map((entity, index) => {
+      if (!entity) { return new PassAction(); }
+      const [details] = sample(entity.moves.filter((item) => {
+        if (item.target === 'adjacentAlly' && !playerActive[2 - index]) { return false; }
+        return !item.disabled && item.pp.current > 0;
+      }));
+      if (details === undefined) { return new PassAction(); }
+      /** @type {number} */
+      let target;
+      if (['normal', 'any'].includes(details.target)) {
+        target = sample([1, 2])[0];
+      } else if(['adjacentAlly'].includes(details.target)) {
+        target = index - 2;
+      } else if(['adjacentAllyOrSelf'].includes(details.target)) {
+        target = sample([0, 1])[0] - 2;
+      } else {
+        target = 0;
+      }
       return new MoveAction(details, target);
     });
   }
@@ -37,15 +50,20 @@ class RandomBattleStrategy extends AbstractBattleStrategy {
    * @param {SharedPokemonState[]} rivalActive
    * @param {FieldState} field
    * @param {boolean[]} switches
-   * @returns {SwitchAction[]}
+   * @returns {(SwitchAction | PassAction)[]}
    */
   // eslint-disable-next-line no-unused-vars
   forceSwitch(playerTeam, playerActive, rivalActive, field, switches) {
     const numSwitches = switches.filter(entity => !!entity).length;
-    return playerTeam
+    /** @type {(SwitchAction | PassAction)[]} */
+    const actions = playerTeam
       .filter(entity => !entity.active && entity.hp.current > 0)
       .slice(0, numSwitches)
       .map(entity => new SwitchAction(entity));
+    while (actions.length < numSwitches) {
+      actions.push(new PassAction());
+    }
+    return actions;
   }
 }
 
