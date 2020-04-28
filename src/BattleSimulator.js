@@ -281,7 +281,8 @@ class BattleSimulator {
   getRivalActivePokemon(rivalId) {
     const rival = this.getAgent(rivalId);
     const rivalSide = this.getSide(rivalId);
-    return rivalSide.active.filter(entity => {
+    return rivalSide.active.map(entity => {
+      if (!entity.isActive) { return null; }
       const pokemon = rival.getPokemon(entity.speciesid);
       return new SharedPokemonState(
         pokemon.getShared(),
