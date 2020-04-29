@@ -1,11 +1,16 @@
-const Battle = require("./battle/Battle");
+const Battle = require('./battle/Battle');
 
 const team = [
   {
     name: 'Venusaur',
     species: 'venusaur',
     gender: 'M',
-    moves: ['sleeppowder', 'sludgebomb', 'leafstorm', 'protect'],
+    moves: [
+      { id: 'sleeppowder', pp: 15 },
+      { id: 'sludgebomb', pp: 10 },
+      { id: 'leafstorm', pp: 5 },
+      { id: 'protect', pp: 10 },
+    ],
     ability: 'chlorophyll',
     evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
     ivs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
@@ -18,7 +23,12 @@ const team = [
     name: 'Torkoal',
     species: 'torkoal',
     gender: 'M',
-    moves: ['eruption', 'heatwave', 'solarbeam', 'earthpower'],
+    moves: [
+      {id: 'eruption', pp: 5 },
+      {id: 'heatwave', pp: 10 },
+      {id: 'solarbeam', pp: 10 },
+      {id: 'earthpower', pp: 10 },
+    ],
     ability: 'drought',
     evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
     ivs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
@@ -31,7 +41,12 @@ const team = [
     name: 'Conkeldurr',
     species: 'conkeldurr',
     gender: 'M',
-    moves: ['machpunch', 'drainpunch', 'icepunch', 'protect'],
+    moves: [
+      { id: 'machpunch', pp: 30 },
+      { id: 'drainpunch', pp: 10 },
+      { id: 'icepunch', pp: 15 },
+      { id: 'protect', pp: 10 },
+    ],
     ability: 'ironfist',
     evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
     ivs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
@@ -44,7 +59,12 @@ const team = [
     name: 'Hatterene',
     species: 'hatterene',
     gender: 'F',
-    moves: ['dazzlinggleam', 'psychic', 'trickroom', 'protect'],
+    moves: [
+      { id: 'dazzlinggleam', pp: 10 },
+      { id: 'psychic', pp: 10 },
+      { id: 'trickroom', pp: 5 },
+      { id: 'protect', pp: 10 },
+    ],
     ability: 'magicbounce',
     evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
     ivs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
@@ -57,7 +77,12 @@ const team = [
     name: 'Incineroar',
     species: 'incineroar',
     gender: 'M',
-    moves: ['fakeout', 'flareblitz', 'partingshot', 'darkestlariat'],
+    moves: [
+      { id: 'fakeout', pp: 10 },
+      { id: 'flareblitz', pp: 15 },
+      { id: 'partingshot', pp: 20 },
+      { id: 'darkestlariat', pp: 10 },
+    ],
     ability: 'intimidate',
     evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
     ivs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
@@ -70,7 +95,12 @@ const team = [
     name: 'Dusclops',
     species: 'dusclops',
     gender: 'M',
-    moves: ['trickroom', 'nightshade', 'painsplit', 'willowisp'],
+    moves: [
+      { id: 'trickroom', pp: 5 },
+      { id: 'nightshade', pp: 15 },
+      { id: 'painsplit', pp: 20 },
+      { id: 'willowisp', pp: 15 },
+    ],
     ability: 'frisk',
     evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
     ivs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },

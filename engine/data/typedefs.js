@@ -56,6 +56,8 @@
  * @typedef {Object} Nature
  * @property {string} id
  * @property {string} name
+ * @property {string | null} plus
+ * @property {string | null} minus
  */
 
 /**
