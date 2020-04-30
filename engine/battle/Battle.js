@@ -4,6 +4,7 @@
  * an information model.
  */
 
+const seedrandom = require('seedrandom');
 const range = require('lodash.range');
 const { fromJS } = require('immutable');
 const PokemonState = require('./PokemonState');
@@ -18,6 +19,7 @@ const initalState = fromJS({
   players: {},
   field: null,
   order: [],
+  seed: null,
 });
 
 class Battle {
@@ -66,6 +68,21 @@ class Battle {
     });
   }
 
+  seedRandom() {
+    const rng = seedrandom('test_seed', { state: true });
+    const seed = rng.state();
+    this.setData(seed, 'seed');
+  }
+
+  getRandom(min, max) {
+    const seed = this.getData('seed');
+    if (seed === null) { throw new Error('Seed has not been initialized,'); }
+    const rng = seedrandom('', { state:seed });
+    const value = rng();
+    const range = max - min + 1;
+    return Math.floor(range * value) + min;
+  }
+
   getIds() {
     return Object.keys(this.hooks);
   }
@@ -106,8 +123,11 @@ class Battle {
     const team = this.getPlayerData(id, 'team');
     const pokemon = choices.map(index => PokemonState.create(team[index - 1]));
     const active = pokemon.slice(0, this.format.active);
-    const passive = pokemon.slice(this.format.active, this.format.total - this.format.active);
-    this.setPlayerData(id, active, 'active', );
+    const passive = [
+      ...pokemon.slice(this.format.active, this.format.total - this.format.active),
+      ...range(this.format.active).map(() => null),
+    ];
+    this.setPlayerData(id, active, 'active');
     this.setPlayerData(id, passive, 'passive');
     this.setPlayerData(id, active.map(() => null), 'actions');
     // Check for Team Preview end
@@ -119,6 +139,7 @@ class Battle {
 
   beginBattle() {
     this.setData('battle', 'phase');
+    this.seedRandom();
     const ids = this.getIds();
     for (const playerId of ids) {
       this.hooks[playerId].onMove();
@@ -133,7 +154,7 @@ class Battle {
    * @param {number} targetPos - 0 = No Target, Positive = Foe Target, Negative = Ally Target
    */
   // FIXME: missing more checks
-  move(id, activePos, movePos, targetPos = 0) {
+  move(id, activePos, movePos, targetPos) {
     if (
       activePos < 1
       || activePos > this.format.active
@@ -145,11 +166,16 @@ class Battle {
       throw new Error('Invalid move input.');
     }
     // Move is Valid checks
-    const move = this.getMove(id, 'active', activePos, movePos);
-    if (!move) { throw new Error('There is no move in this slot.'); }
-    if (move.disabled) { throw new Error('This move has been disabled.'); }
-    if (move.pp === 0) { throw new Error('There is no PP left in this move.'); }
+    const moveState = this.getMove(id, 'active', activePos, movePos);
+    if (!moveState) { throw new Error('There is no move in this slot.'); }
+    if (moveState.disabled) { throw new Error('This move has been disabled.'); }
+    if (moveState.pp === 0) { throw new Error('There is no PP left in this move.'); }
     // FIXME: Add Target types valid check
+    if (moveState.target === 'normal') {
+      if (targetPos <= 0) { throw new Error('You must choose a foe\'s position.'); }
+    } else {
+      throw new Error(`Unrecognized target type: ${moveState.target}.`);
+    }
     this.setAction(id, activePos, { type: 'move', move: movePos, target: targetPos });
   }
 
@@ -159,10 +185,11 @@ class Battle {
       activePos < 1
       || activePos > this.format.active
       || passivePos < 1
-      || passivePos > this.format.total - this.format.active) {
+      || passivePos > this.format.total) {
       throw new Error('Invalid switch input.');
     }
     const passive = this.getPokemon(id, 'passive', passivePos);
+    if (!passive) { throw new Error('There is not Pokemon in this slot.'); }
     if (passive.hp === 0) { throw new Error('Cannot switch into a fainted Pokemon.'); }
     this.setAction(id, activePos, { type: 'switch', passive: passivePos });
   }
@@ -267,19 +294,36 @@ class Battle {
     for (const { id, pos } of activeIds) {
       const action = this.getAction(id, pos);
       if (action.type !== 'switch') { continue; }
-      const active = this.getPokemon(id, 'active', pos);
-      const passive = this.getPokemon(id, 'passive', action.passive);
-      // FIXME: do some cleanup like clear volatiles, boosts, etc.
-      this.setPokemon(id, 'active', pos, passive);
-      this.setPokemon(id, 'passive', action.passive, active);
+      this.executeSwitch(id, pos, action.passive);
       this.clearAction(id, pos);
     }
   }
 
-  getBoostedStat(id, pos, key, value) {
-    value = value !== undefined ? value : this.getPlayerData(id, 'active', pos - 1, 'stats', key);
-    const boost = this.getPlayerData(id, 'active', pos - 1, 'boosts', key);
-    return getBoostedValue(key, boost, value);
+  executeSwitch(id, activePos, passivePos) {
+    const active = this.getPokemon(id, 'active', activePos);
+    const passive = this.getPokemon(id, 'passive', passivePos);
+    // FIXME: do some cleanup like clear volatiles, boosts, etc.
+    this.setPokemon(id, 'active', activePos, passive);
+    this.setPokemon(id, 'passive', passivePos, active);
+  }
+
+  getFirstEmptyPassivePosition(id) {
+    for (const pos of range(1, this.format.total)) {
+      if (this.getPlayerData(id, 'passive', pos - 1) === null) {
+        return pos;
+      }
+    }
+    throw new Error('This should not happen');
+  }
+
+  getBoost(id, pos, key) {
+    return this.getPlayerData(id, 'active', pos - 1, 'boosts', key);
+  }
+
+  getBoostedStat(id, pos, key) {
+    const stat = this.getPlayerData(id, 'active', pos - 1, 'stats', key);
+    const boost = this.getBoost(id, pos, key);
+    return getBoostedValue(key, boost, stat);
   }
 
   performMoveActions() {
@@ -290,18 +334,64 @@ class Battle {
     }
   }
 
+  /**
+   * @param {string} id
+   * @param {number} pos
+   */
   executeMoveAction(id, pos) {
     const action = this.getAction(id, pos);
     // FIXME: check if can move, sleep, frozen, volatiles, etc.
-    const { id: moveId } = this.getMove(id, 'active', pos, action.move);
-    const move = moves[moveId];
-    let accuracy;
-    if (move.accuracy === true) {
-      accuracy = 100;
-    } else {
-      accuracy = this.getBoostedStat(id, pos, 'accuracy', move.accuracy);
-    }
     // FIXME: update PP
+    const moveState = this.getMove(id, 'active', pos, action.move);
+    const move = moves[moveState.id];
+    const rivalId = this.getIds().find(item => item !== id);
+    // Get Targets
+    const targetPositions = [];
+    if (moveState.target === 'normal') {
+      // FIXME: if target has fainted then target must be replaced
+      targetPositions.push({ id: rivalId, pos: action.target });
+    }
+    // Execute each move
+    const active = this.getPokemon(id, 'active', pos);
+    for (const { id: targetId, pos: targetPos } of targetPositions) {
+      let accuracy;
+      if (move.accuracy === true) {
+        accuracy = 100;
+      } else {
+        const accuracyBoost = this.getBoost(id, pos, 'accuracy');
+        const evasionBoost = this.getBoost(targetId, targetPos, 'evasion');
+        const boost = Math.min(-6, Math.max(6, accuracyBoost - evasionBoost));
+        accuracy = getBoostedValue('accuracy', boost, move.accuracy);
+      }
+      // FIXME: add accuracy modifications
+      const hitValue = this.getRandom(1, 100);
+      if (hitValue > accuracy) {
+        // FIXME: hit misses
+        continue;
+      }
+      if (move.category === 'status') {
+        // FIXME: does not damage
+        continue;
+      }
+      const level = active.build.level;
+      let offenseKey = move.category === 'physical' ? 'atk' : 'spa';
+      let defenseKey = move.category === 'physical' ? 'def' : 'spd';
+      const offenseStat = this.getBoostedStat(id, pos, offenseKey);
+      const defenseStat = this.getBoostedStat(targetId, targetPos, defenseKey);
+      let damage = (((2 * level / 5 + 2) * move.basePower * offenseStat / defenseStat) / 50 + 2);
+      // FIXME: implement other modifiers
+      damage = Math.floor(damage);
+      const target = this.getPokemon(targetId, 'active', targetPos);
+      target.hp = Math.min(0, target.hp - damage);
+      this.setPokemon(targetId, 'active', targetPos, target);
+      if (target.hp > 0) {
+        // FIXME: trigger secondary effects
+      } else {
+        const swithoutPos = this.getFirstEmptyPassivePosition(targetId);
+        this.executeSwitch(targetId, targetPos, swithoutPos);
+        // FIXME: if remaining pokemon swith them out
+      }
+    }
     this.clearAction(id, pos);
   }
 

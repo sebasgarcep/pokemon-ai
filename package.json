@@ -17,6 +17,7 @@
     "fs-extra": "9.0.0",
     "immutable": "4.0.0-rc.12",
     "lodash.omit": "4.5.0",
-    "lodash.range": "3.2.0"
+    "lodash.range": "3.2.0",
+    "seedrandom": "3.0.5"
   }
 }

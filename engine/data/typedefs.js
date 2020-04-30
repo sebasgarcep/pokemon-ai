@@ -16,7 +16,7 @@
   * @property {'physical' | 'special' | 'status'} category
   * @property {string} desc
   * @property {string} target
-  * @property {string} type
+  * @property {Type} type
   * @property {number} priority
   * @property {string | null} status
   * @property {string | null} volatile
@@ -99,6 +99,14 @@
  * @property {string} name
  * @property {number} num
  * @property {string} desc
+ */
+
+/**
+ * @typedef {'bug' | 'dark' | 'dragon' | 'electric' | 'fairy' | 'fighting' | 'fire' | 'flying' | 'ghost' | 'grass' | 'ground' | 'ice' | 'normal' | 'poison' | 'psychic' | 'rock' | 'steel' | 'water'} Type
+ */
+
+/**
+ * @typedef {Object<Type, -1 | 0 | 1 | null>} TypeChart
  */
 
 module.exports = null;
