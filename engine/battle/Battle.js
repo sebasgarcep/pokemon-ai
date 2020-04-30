@@ -1,6 +1,6 @@
 const range = require('lodash.range');
 const { fromJS } = require('immutable');
-const createPokemonState = require('../utils/createPokemonState');
+const PokemonState = require('./PokemonState');
 
 const initalState = fromJS({
   phase: 'setplayers',
@@ -83,8 +83,8 @@ class Battle {
     if (choices.length !== this.format.total) {
       throw new Error(`You must select exactly ${this.format.total} pokemon.`);
     }
-    const team = this.getPlayerData(id, 'team')
-    const pokemon = choices.map(index => createPokemonState(team[index - 1]));
+    const team = this.getPlayerData(id, 'team');
+    const pokemon = choices.map(index => PokemonState.create(team[index - 1]));
     const active = pokemon.slice(0, this.format.active);
     const passive = pokemon.slice(this.format.active, this.format.total - this.format.active);
     this.setPlayerData(id, active, 'active', );
@@ -167,7 +167,7 @@ class Battle {
           } else {
             return null;
           }
-        })
+        });
       this.setPlayerData(playerId, actions, 'actions');
     }
   }

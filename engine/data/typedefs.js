@@ -13,7 +13,7 @@
   * @property {number} num
   * @property {number | true} accuracy
   * @property {number} basePower
-  * @property {string} category
+  * @property {'physical' | 'special' | 'status'} category
   * @property {string} desc
   * @property {string} target
   * @property {string} type
@@ -21,23 +21,35 @@
   * @property {string | null} status
   * @property {string | null} volatile
   * @property {SecondaryEffects | null} secondary
-  * @property {{ boosts: Boosts | null }} self
+  * @property {{ boosts: Boosts } | null} self
+  * @property {string | null} effect
   * @property {MoveFlags} flags
   */
 
 /**
  * @typedef {Object} MoveFlags
+ * @property {number} authentic
  * @property {number} bullet
+ * @property {number} charge
+ * @property {number} contact
+ * @property {number} defrost
+ * @property {number} heal
  * @property {number} mirror
+ * @property {number} mystery
+ * @property {number} nonsky
  * @property {number} powder
  * @property {number} protect
+ * @property {number} punch
  * @property {number} reflectable
+ * @property {number} sound
  */
 
 /**
  * @typedef {Object} SecondaryEffects
+ * @property {Boosts | null} boosts
  * @property {number} chance
- * @property {string} status
+ * @property {string | null} status
+ * @property {string | null} volatile
  */
 
 /**
@@ -79,6 +91,14 @@
  * @property {number} spe
  * @property {number} accuracy
  * @property {number} evasion
+ */
+
+/**
+ * @typedef {Object} Ability
+ * @property {string} id
+ * @property {string} name
+ * @property {number} num
+ * @property {string} desc
  */
 
 module.exports = null;
