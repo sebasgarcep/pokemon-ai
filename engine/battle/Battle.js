@@ -4,6 +4,10 @@
  * an information model.
  */
 
+/**
+ * FIXME: perhaps a more centralized event listener will be better for the architecture.
+ */
+
 const seedrandom = require('seedrandom');
 const range = require('lodash.range');
 const { fromJS } = require('immutable');
@@ -46,16 +50,12 @@ class Battle {
   setPlayer(id, team, onTeamPreview, onMove, onForceSwitch, onEnd) {
     if (this.getIds().length >= 2) { throw new Error('Cannot set more than two players.'); }
 
-    const opts = {};
-    // Hooks
-    opts.onTeamPreview = (...args) => onTeamPreview(opts, ...args);
-    opts.onMove = (...args) => onMove(opts, ...args);
-    opts.onForceSwitch = (...args) => onForceSwitch(opts, ...args);
-    opts.onEnd = (...args) => onEnd(opts, ...args);
-    // Methods
-    opts.select = this.select.bind(this, id);
-    opts.move = this.move.bind(this, id);
-    opts.switch = this.switch.bind(this, id);
+    const opts = {
+      onTeamPreview: (...args) => onTeamPreview(this.select.bind(this, id), ...args),
+      onMove: (...args) => onMove(this.move.bind(this, id), this.switch.bind(this, id), ...args),
+      onForceSwitch: (...args) => onForceSwitch(this.switch.bind(this, id), ...args),
+      onEnd,
+    };
 
     this.hooks[id] = opts;
 
@@ -65,6 +65,7 @@ class Battle {
       active: null,
       passive: null,
       actions: null,
+      forcedSwitches: null,
     });
   }
 
@@ -106,10 +107,26 @@ class Battle {
     return this.state;
   }
 
+  /**
+   * Sets a battle's current phase.
+   * @param {'setplayers' | 'teampreview' | 'choice' | 'run' | 'switch' | 'end'} phase
+   */
+  setPhase(phase) {
+    return this.setData(phase, 'phase');
+  }
+
+  /**
+   * Gets a battle's current phase.
+   * @returns {'setplayers' | 'teampreview' | 'choice' | 'run' | 'switch' | 'end'}
+   */
+  getPhase() {
+    return this.getData('phase');
+  }
+
   start() {
     const ids = this.getIds();
     if (ids.length < 2) { throw new Error('Both players must be set for the battle to begin.'); }
-    this.setData('teampreview', 'phase');
+    this.setPhase('teampreview');
     for (const playerId of ids) {
       this.hooks[playerId].onTeamPreview();
     }
@@ -130,6 +147,7 @@ class Battle {
     this.setPlayerData(id, active, 'active');
     this.setPlayerData(id, passive, 'passive');
     this.setPlayerData(id, active.map(() => null), 'actions');
+    this.setPlayerData(id, [], 'forcedSwitches');
     // Check for Team Preview end
     const ids = this.getIds();
     if (ids.every(playerId => !!this.getPlayerData(playerId, 'active'))) {
@@ -138,8 +156,12 @@ class Battle {
   }
 
   beginBattle() {
-    this.setData('battle', 'phase');
     this.seedRandom();
+    this.triggerOnMove();
+  }
+
+  triggerOnMove() {
+    this.setPhase('choice');
     const ids = this.getIds();
     for (const playerId of ids) {
       this.hooks[playerId].onMove();
@@ -191,7 +213,17 @@ class Battle {
     const passive = this.getPokemon(id, 'passive', passivePos);
     if (!passive) { throw new Error('There is not Pokemon in this slot.'); }
     if (passive.hp === 0) { throw new Error('Cannot switch into a fainted Pokemon.'); }
-    this.setAction(id, activePos, { type: 'switch', passive: passivePos });
+    const phase = this.getPhase();
+    if (phase === 'choice') {
+      this.setAction(id, activePos, { type: 'switch', passive: passivePos });
+    } else if (phase === 'run' || phase === 'switch') {
+      let forcedSwitches = this.getPlayerData(id, 'forcedSwitches');
+      if (!forcedSwitches.includes(activePos)) { throw new Error('This Pokemon cannot be switched out.'); }
+      forcedSwitches = forcedSwitches.filter(item => item !== activePos);
+      this.executeSwitch(id, activePos, passivePos);
+      this.setPlayerData(id, forcedSwitches, 'forcedSwitches');
+      if (phase === 'switch') { this.finishForcedSwitches(); }
+    }
   }
 
   clone(opts) {
@@ -262,21 +294,15 @@ class Battle {
       if (this.getAction(id, pos) === null) { return; }
     }
     // Execute commands
+    this.setPhase('run');
     this.runActions();
-    // Clean up actions
-    for (const { id, pos } of activeIds) {
-      if (this.getPokemon(id, 'active', pos) === null) {
-        this.setAction(id, pos, { type: 'pass' });
-      } else {
-        this.clearAction(id, pos);
-      }
-    }
   }
 
   runActions() {
     this.performPassActions();
     this.performSwitchActions();
     this.performMoveActions();
+    this.performForcedSwitches();
   }
 
   performPassActions() {
@@ -334,6 +360,49 @@ class Battle {
     }
   }
 
+  performForcedSwitches() {
+    this.setPhase('switch');
+    for (const id of this.getIds()) {
+      const active = this.getPlayerData(id, 'active');
+      const nullPositions = [];
+      for (let pos = 1; pos <= this.format.active; pos += 1) {
+        if (active[pos - 1] === null) {
+          nullPositions.push(pos);
+        }
+      }
+      if (nullPositions.length === 0) { continue; }
+      const passive = this.getPlayerData(id, 'passive');
+      if (passive.find(item => item && item.hp > 0) === undefined) {
+        continue;
+      }
+      this.setPlayerData(id, nullPositions, 'forcedSwitches');
+      this.hooks[id].onForceSwitch();
+    }
+    this.finishForcedSwitches();
+  }
+
+  finishForcedSwitches() {
+    for (const id of this.getIds()) {
+      const numForcedSwitches = this.getPlayerData(id, 'forcedSwitches', 'length');
+      if (numForcedSwitches > 0) { return; }
+    }
+    this.finishRunActions();
+  }
+
+  finishRunActions() {
+    // Clean up actions
+    const activeIds = this.getActiveIds();
+    for (const { id, pos } of activeIds) {
+      if (this.getPokemon(id, 'active', pos) === null) {
+        this.setAction(id, pos, { type: 'pass' });
+      } else {
+        this.clearAction(id, pos);
+      }
+    }
+    // Start next turn
+    this.triggerOnMove();
+  }
+
   /**
    * @param {string} id
    * @param {number} pos
@@ -389,7 +458,6 @@ class Battle {
       } else {
         const swithoutPos = this.getFirstEmptyPassivePosition(targetId);
         this.executeSwitch(targetId, targetPos, swithoutPos);
-        // FIXME: if remaining pokemon swith them out
       }
     }
     this.clearAction(id, pos);
