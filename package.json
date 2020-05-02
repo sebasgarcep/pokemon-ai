@@ -6,7 +6,8 @@
   "license": "MIT",
   "scripts": {
     "import-simulator": "node bin/import-simulator.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "terminal-game": "node examples/terminal-game/index.js"
   },
   "devDependencies": {
     "bent": "7.3.0",

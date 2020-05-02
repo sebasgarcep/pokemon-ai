@@ -59,7 +59,7 @@ class Battle {
 
     this.hooks[id] = opts;
 
-    this.setPlayerData(id, {
+    this.setPlayerState(id, [], {
       id,
       team,
       active: null,
@@ -72,11 +72,11 @@ class Battle {
   seedRandom() {
     const rng = seedrandom('test_seed', { state: true });
     const seed = rng.state();
-    this.setData(seed, 'seed');
+    this.setState(['seed'], seed);
   }
 
   getRandom(min, max) {
-    const seed = this.getData('seed');
+    const seed = this.getState(['seed']);
     if (seed === null) { throw new Error('Seed has not been initialized,'); }
     const rng = seedrandom('', { state:seed });
     const value = rng();
@@ -88,21 +88,45 @@ class Battle {
     return Object.keys(this.hooks);
   }
 
-  getPlayerData(id, ...keys) {
-    return this.getData(['players', id, ...keys]);
+  getRivalId(id) {
+    return this.getIds().find(item => item !== id);
   }
 
-  setPlayerData(id, data, ...keys) {
-    return this.setData(data, ['players', id, ...keys]);
+  /**
+   * Gets data deep from a player's state subtree.
+   * @param {string} id
+   * @param {(string | number)[]} keys
+   */
+  getPlayerState(id, keys) {
+    return this.getState(['players', id, ...keys]);
   }
 
-  getData(...keys) {
+  /**
+   * Sets data deep in a player's state subtree.
+   * @param {string} id
+   * @param {(string | number)[]} keys
+   * @param {any} data
+   */
+  setPlayerState(id, keys, data) {
+    return this.setState(['players', id, ...keys], data);
+  }
+
+  /**
+   * Gets data deep in the state tree
+   * @param  {(string | number)[]} keys
+   */
+  getState(keys) {
     const data = this.state.getIn(keys);
     if (data && data.toJS) { return data.toJS(); }
     return data;
   }
 
-  setData(data, ...keys) {
+  /**
+   * Sets data deep in the state tree.
+   * @param {(string | number)[]} keys
+   * @param {any} data
+   */
+  setState(keys, data) {
     this.state = this.state.setIn(keys, fromJS(data));
     return this.state;
   }
@@ -112,7 +136,7 @@ class Battle {
    * @param {'setplayers' | 'teampreview' | 'choice' | 'run' | 'switch' | 'end'} phase
    */
   setPhase(phase) {
-    return this.setData(phase, 'phase');
+    return this.setState(['phase'], phase);
   }
 
   /**
@@ -120,7 +144,7 @@ class Battle {
    * @returns {'setplayers' | 'teampreview' | 'choice' | 'run' | 'switch' | 'end'}
    */
   getPhase() {
-    return this.getData('phase');
+    return this.getState(['phase']);
   }
 
   start() {
@@ -128,7 +152,11 @@ class Battle {
     if (ids.length < 2) { throw new Error('Both players must be set for the battle to begin.'); }
     this.setPhase('teampreview');
     for (const playerId of ids) {
-      this.hooks[playerId].onTeamPreview();
+      const playerTeam = this.getPlayerState(playerId, ['team']);
+      const rivalId = this.getRivalId(playerId);
+      const rivalTeam = this.getPlayerState(rivalId, ['team'])
+        .map(item => ({ species: item.species, gender: item.gender }));
+      this.hooks[playerId].onTeamPreview(playerTeam, rivalTeam);
     }
   }
 
@@ -137,33 +165,42 @@ class Battle {
     if (choices.length !== this.format.total) {
       throw new Error(`You must select exactly ${this.format.total} pokemon.`);
     }
-    const team = this.getPlayerData(id, 'team');
+    const team = this.getPlayerState(id, ['team']);
     const pokemon = choices.map(index => PokemonState.create(team[index - 1]));
     const active = pokemon.slice(0, this.format.active);
     const passive = [
       ...pokemon.slice(this.format.active, this.format.total - this.format.active),
       ...range(this.format.active).map(() => null),
     ];
-    this.setPlayerData(id, active, 'active');
-    this.setPlayerData(id, passive, 'passive');
-    this.setPlayerData(id, active.map(() => null), 'actions');
-    this.setPlayerData(id, [], 'forcedSwitches');
+    this.setPlayerState(id, ['active'], active);
+    this.setPlayerState(id, ['passive'], passive);
+    this.setPlayerState(id, ['actions'], active.map(() => null));
+    this.setPlayerState(id, ['forcedSwitches'], []);
     // Check for Team Preview end
     const ids = this.getIds();
-    if (ids.every(playerId => !!this.getPlayerData(playerId, 'active'))) {
+    if (ids.every(playerId => !!this.getPlayerState(playerId, ['active']))) {
       this.beginBattle();
     }
   }
 
+  /**
+   * Initializes and begins current battle.
+   */
   beginBattle() {
     this.seedRandom();
     this.triggerOnMove();
   }
 
+  /**
+   * Triggers onMove hooks.
+   */
   triggerOnMove() {
     this.setPhase('choice');
     const ids = this.getIds();
     for (const playerId of ids) {
+      const rivalId = this.getRivalId(playerId);
+      const playerActive = this.getPlayerState(playerId, ['active']);
+      const rivalActive = this.getPlayerState(rivalId, ['active']);
       this.hooks[playerId].onMove();
     }
   }
@@ -217,11 +254,11 @@ class Battle {
     if (phase === 'choice') {
       this.setAction(id, activePos, { type: 'switch', passive: passivePos });
     } else if (phase === 'run' || phase === 'switch') {
-      let forcedSwitches = this.getPlayerData(id, 'forcedSwitches');
+      let forcedSwitches = this.getPlayerState(id, ['forcedSwitches']);
       if (!forcedSwitches.includes(activePos)) { throw new Error('This Pokemon cannot be switched out.'); }
       forcedSwitches = forcedSwitches.filter(item => item !== activePos);
       this.executeSwitch(id, activePos, passivePos);
-      this.setPlayerData(id, forcedSwitches, 'forcedSwitches');
+      this.setPlayerState(id, ['forcedSwitches'], forcedSwitches);
       if (phase === 'switch') { this.finishForcedSwitches(); }
     }
   }
@@ -241,7 +278,7 @@ class Battle {
    * @param {number} pos
    */
   getPokemon(id, location, pos) {
-    return this.getPlayerData(id, location, pos - 1);
+    return this.getPlayerState(id, [location, pos - 1]);
   }
 
   /**
@@ -251,11 +288,18 @@ class Battle {
    * @param {number} pos
    */
   setPokemon(id, location, pos, pokemon) {
-    return this.setPlayerData(id, pokemon, location, pos - 1);
+    return this.setPlayerState(id, [location, pos - 1], pokemon);
   }
 
+  /**
+   * Returns a move at a particular location.
+   * @param {string} id
+   * @param {'active' | 'passive'} location
+   * @param {number} pokemonPos
+   * @param {number} movePos
+   */
   getMove(id, location, pokemonPos, movePos) {
-    return this.getPlayerData(id, location, pokemonPos - 1, 'moves', movePos - 1);
+    return this.getPlayerState(id, [location, pokemonPos - 1, 'moves', movePos - 1]);
   }
 
   /**
@@ -264,16 +308,16 @@ class Battle {
    * @param {number} pos
    */
   getAction(id, pos) {
-    return this.getPlayerData(id, 'actions', pos - 1);
+    return this.getPlayerState(id, ['actions', pos - 1]);
   }
 
   setAction(id, pos, action) {
-    this.setPlayerData(id, action, 'active', pos - 1);
+    this.setPlayerState(id, ['active', pos - 1], action);
     this.commit();
   }
 
   clearAction(id, pos) {
-    return this.setPlayerData(id, null, 'actions', pos);
+    return this.setPlayerState(id, ['actions', pos], null);
   }
 
   getActiveIds() {
@@ -335,19 +379,31 @@ class Battle {
 
   getFirstEmptyPassivePosition(id) {
     for (const pos of range(1, this.format.total)) {
-      if (this.getPlayerData(id, 'passive', pos - 1) === null) {
+      if (this.getPlayerState(id, ['passive', pos - 1]) === null) {
         return pos;
       }
     }
     throw new Error('This should not happen');
   }
 
+  /**
+   *
+   * @param {string} id
+   * @param {number} pos
+   * @param {'atk' | 'def' | 'spa' | 'spd' | 'spe' | 'accuracy' | 'evasion'} key
+   */
   getBoost(id, pos, key) {
-    return this.getPlayerData(id, 'active', pos - 1, 'boosts', key);
+    return this.getPlayerState(id, ['active', pos - 1, 'boosts', key]);
   }
 
+  /**
+   *
+   * @param {string} id
+   * @param {number} pos
+   * @param {'atk' | 'def' | 'spa' | 'spd' | 'spe'} key
+   */
   getBoostedStat(id, pos, key) {
-    const stat = this.getPlayerData(id, 'active', pos - 1, 'stats', key);
+    const stat = this.getPlayerState(id, ['active', pos - 1, 'stats', key]);
     const boost = this.getBoost(id, pos, key);
     return getBoostedValue(key, boost, stat);
   }
@@ -355,7 +411,7 @@ class Battle {
   performMoveActions() {
     while (this.missingAnyAction()) {
       this.setOrder();
-      const [{ id, pos }] = this.getData('order');
+      const [{ id, pos }] = this.getState(['order']);
       this.executeMoveAction(id, pos);
     }
   }
@@ -363,7 +419,7 @@ class Battle {
   performForcedSwitches() {
     this.setPhase('switch');
     for (const id of this.getIds()) {
-      const active = this.getPlayerData(id, 'active');
+      const active = this.getPlayerState(id, ['active']);
       const nullPositions = [];
       for (let pos = 1; pos <= this.format.active; pos += 1) {
         if (active[pos - 1] === null) {
@@ -371,11 +427,11 @@ class Battle {
         }
       }
       if (nullPositions.length === 0) { continue; }
-      const passive = this.getPlayerData(id, 'passive');
+      const passive = this.getPlayerState(id, ['passive']);
       if (passive.find(item => item && item.hp > 0) === undefined) {
         continue;
       }
-      this.setPlayerData(id, nullPositions, 'forcedSwitches');
+      this.setPlayerState(id, ['forcedSwitches'], nullPositions);
       this.hooks[id].onForceSwitch();
     }
     this.finishForcedSwitches();
@@ -383,7 +439,7 @@ class Battle {
 
   finishForcedSwitches() {
     for (const id of this.getIds()) {
-      const numForcedSwitches = this.getPlayerData(id, 'forcedSwitches', 'length');
+      const numForcedSwitches = this.getPlayerState(id, ['forcedSwitches', 'length']);
       if (numForcedSwitches > 0) { return; }
     }
     this.finishRunActions();
@@ -413,7 +469,7 @@ class Battle {
     // FIXME: update PP
     const moveState = this.getMove(id, 'active', pos, action.move);
     const move = moves[moveState.id];
-    const rivalId = this.getIds().find(item => item !== id);
+    const rivalId = this.getRivalId();
     // Get Targets
     const targetPositions = [];
     if (moveState.target === 'normal') {
@@ -443,7 +499,9 @@ class Battle {
         continue;
       }
       const level = active.build.level;
+      /** @type {'atk' | 'spa'} */
       let offenseKey = move.category === 'physical' ? 'atk' : 'spa';
+      /** @type {'def' | 'spd'} */
       let defenseKey = move.category === 'physical' ? 'def' : 'spd';
       const offenseStat = this.getBoostedStat(id, pos, offenseKey);
       const defenseStat = this.getBoostedStat(targetId, targetPos, defenseKey);
@@ -488,7 +546,7 @@ class Battle {
       })
       .filter(item => item !== null)
       .sort((a, b) => a.priority === b.priority ? b.speed - a.speed : b.priority - a.priority);
-    this.setData(order, 'order');
+    this.setState(['order'], order);
   }
 }
 
