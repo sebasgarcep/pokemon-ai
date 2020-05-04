@@ -716,8 +716,8 @@ class Battle {
     opts.damage = (((2 * opts.level / 5 + 2) * opts.power * opts.offenseStat / opts.defenseStat) / 50 + 2);
     if (stabModifier) { opts.damage *= 1.5; }
     opts.damage *= Math.pow(2, opts.typeModifier);
-    opts.damage = Math.max(1, Math.floor(opts.damage));
     opts.damage *= opts.randomModifier / 100;
+    opts.damage = Math.max(1, Math.floor(opts.damage));
     // FIXME: implement other modifiers (Crit, Hooks, etc.)
     return opts;
   }
