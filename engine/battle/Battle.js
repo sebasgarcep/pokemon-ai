@@ -158,16 +158,60 @@ class Battle {
     return this.getState(['phase']);
   }
 
+  /**
+   * Sets the forced switches for a player.
+   * @param {string} id
+   * @param {number[]} data
+   */
+  setForcedSwitches(id, data) {
+    return this.setPlayerState(id, ['forcedSwitches'], data);
+  }
+
+  /**
+   * Gets the forced switches for a player.
+   * @param {string} id
+   * @return {number[]}
+   */
+  getForcedSwitches(id) {
+    return this.getPlayerState(id, ['forcedSwitches']);
+  }
+
+  /**
+   * Gets player's battle state.
+   */
+  getCompletePlayerState(playerId) {
+    const player = {
+      id: playerId,
+      active: this.getPlayerState(playerId, ['active']),
+      passive: this.getPlayerState(playerId, ['passive']),
+    };
+    const rivalId = this.getRivalId(playerId);
+    const rival = {
+      id: rivalId,
+      active: this.getPlayerState(rivalId, ['active'])
+        .map(item => item && { ...item, hp: Math.ceil( item.hp * 48 / item.maxhp ), maxhp: 48 }),
+      passive: [], // FIXME: Only show Pokemon that have come out, otherwise set to null or something else.
+    };
+    const field = this.getState(['field']);
+    return { player, rival, field };
+  }
+
   start() {
     const ids = this.getIds();
     if (ids.length < 2) { throw new Error('Both players must be set for the battle to begin.'); }
     this.setPhase('teampreview');
     for (const playerId of ids) {
-      const playerTeam = this.getPlayerState(playerId, ['builds']);
+      const player = {
+        id: playerId,
+        team: this.getPlayerState(playerId, ['builds']),
+      };
       const rivalId = this.getRivalId(playerId);
-      const rivalTeam = this.getPlayerState(rivalId, ['builds'])
-        .map(item => ({ species: item.species, gender: item.gender }));
-      this.hooks[playerId].onTeamPreview(playerTeam, rivalTeam);
+      const rival = {
+        id: rivalId,
+        team: this.getPlayerState(rivalId, ['builds'])
+          .map(item => ({ species: item.species, gender: item.gender })),
+      };
+      this.hooks[playerId].onTeamPreview(player, rival);
     }
   }
 
@@ -186,7 +230,7 @@ class Battle {
     this.setPlayerState(id, ['active'], active);
     this.setPlayerState(id, ['passive'], passive);
     this.setPlayerState(id, ['actions'], active.map(() => null));
-    this.setPlayerState(id, ['forcedSwitches'], []);
+    this.setForcedSwitches(id, []);
     // Check for Team Preview end
     const ids = this.getIds();
     if (ids.every(playerId => !!this.getPlayerState(playerId, ['active']))) {
@@ -224,14 +268,8 @@ class Battle {
     this.setState(['turn'], this.getTurn() + 1);
     const ids = this.getIds();
     for (const playerId of ids) {
-      const rivalId = this.getRivalId(playerId);
-      const playerActive = this.getPlayerState(playerId, ['active']);
-      const playerPassive = this.getPlayerState(playerId, ['passive']);
-      const rivalActive = this.getPlayerState(rivalId, ['active'])
-        .map(item => ({ ...item, hp: Math.ceil( item.hp * 48 / item.maxhp ), maxhp: 48 }));
-      const rivalPassive = []; // FIXME: Only show Pokemon that have come out, otherwise set to null or something else.
-      const field = this.getState(['field']);
-      this.hooks[playerId].onMove(playerActive, playerPassive, rivalActive, rivalPassive, field);
+      const { player, rival, field } = this.getCompletePlayerState(playerId);
+      this.hooks[playerId].onMove(player, rival, field);
     }
   }
 
@@ -284,11 +322,11 @@ class Battle {
     if (phase === 'choice') {
       this.setAction(id, activePos, { type: 'switch', passive: passivePos });
     } else if (phase === 'run' || phase === 'switch') {
-      let forcedSwitches = this.getPlayerState(id, ['forcedSwitches']);
+      let forcedSwitches = this.getForcedSwitches(id);
       if (!forcedSwitches.includes(activePos)) { throw new Error('This Pokemon cannot be switched out.'); }
       forcedSwitches = forcedSwitches.filter(item => item !== activePos);
       this.executeSwitch(id, activePos, passivePos);
-      this.setPlayerState(id, ['forcedSwitches'], forcedSwitches);
+      this.setForcedSwitches(id, forcedSwitches);
       if (phase === 'switch') { this.finishForcedSwitches(); }
     }
   }
@@ -451,29 +489,36 @@ class Battle {
 
   performForcedSwitches() {
     this.setPhase('switch');
+    let startNextTurn = true;
     for (const id of this.getIds()) {
       const active = this.getPlayerState(id, ['active']);
-      const nullPositions = [];
+      const forcedSwitches = [];
       for (let pos = 1; pos <= this.format.active; pos += 1) {
         if (active[pos - 1] === null) {
-          nullPositions.push(pos);
+          forcedSwitches.push(pos);
         }
       }
-      if (nullPositions.length === 0) { continue; }
+      if (forcedSwitches.length === 0) { continue; }
       const passive = this.getPlayerState(id, ['passive']);
       if (passive.find(item => item && item.hp > 0) === undefined) {
         continue;
       }
-      this.setPlayerState(id, ['forcedSwitches'], nullPositions);
-      this.hooks[id].onForceSwitch();
+      startNextTurn = false;
+      this.setForcedSwitches(id, forcedSwitches);
+      const { player, rival, field } = this.getCompletePlayerState(id);
+      this.hooks[id].onForceSwitch(player, rival, field, forcedSwitches);
     }
-    this.finishForcedSwitches();
+    if (startNextTurn) { this.finishForcedSwitches(); }
+  }
+
+  hasForcedSwitchesLeft(id) {
+    const forcedSwitches = this.getForcedSwitches(id);
+    return forcedSwitches.length > 0;
   }
 
   finishForcedSwitches() {
     for (const id of this.getIds()) {
-      const numForcedSwitches = this.getPlayerState(id, ['forcedSwitches', 'length']);
-      if (numForcedSwitches > 0) { return; }
+      if (this.hasForcedSwitchesLeft(id)) { return; }
     }
     this.finishRunActions();
   }

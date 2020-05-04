@@ -23,10 +23,10 @@ class TerminalGame {
       this.battle.setPlayer(
         id,
         this.teams[id],
-        this.onTeamPreview.bind(this, id),
-        this.onMove.bind(this, id),
-        this.onForceSwitch.bind(this, id),
-        this.onEnd.bind(this, id),
+        this.onTeamPreview.bind(this),
+        this.onMove.bind(this),
+        this.onForceSwitch.bind(this),
+        this.onEnd.bind(this),
       );
     }
     this.battle.start();
@@ -49,9 +49,9 @@ class TerminalGame {
     return job;
   }
 
-  onTeamPreview(id, select, playerTeam, rivalTeam) {
-    let message = `${id} team: ${playerTeam.map(item => item.species).join(', ')}\n`;
-    message += `rival: ${rivalTeam.map(item => item.species).join(', ')}\n`;
+  onTeamPreview(select, player, rival) {
+    let message = `${player.id} team: ${player.team.map(item => item.species).join(', ')}\n`;
+    message += `rival: ${rival.team.map(item => item.species).join(', ')}\n`;
     return this.prompt(message, response => {
       const choices = response.replace(/\D/g, '').split('');
       select(choices);
@@ -123,54 +123,86 @@ class TerminalGame {
     console.log(message);
   }
 
-  onMove(id, move, change, playerActive, playerPassive, rivalActive, rivalPassive, field) {
+  requestMove(move, input) {
+    const values = input.map(item => Number.parseInt(item, 10));
+    move(...values);
+  }
+
+  requestSwitch(change, input) {
+    const values = input.map(item => Number.parseInt(item, 10));
+    change(...values);
+  }
+
+  requestShow(player, rival, field, input) {
+    const key = input[0];
+    if (key === 'moves') {
+      this.showMoves(input, player.active);
+    } else if (key === 'team') {
+      this.showTeam(player.active, player.passive);
+    } else if (key === 'field') {
+      throw new Error('Not implemented.');
+    } else if (key === 'state') {
+      throw new Error('Not implemented.');
+    } else if (key === 'pokemon') {
+      throw new Error('Not implemented.');
+    } else if (key === 'help') {
+      this.showHelp();
+    } else {
+      throw new Error('Only moves, team, field, state, pokemon and help are valid options to show.');
+    }
+  }
+
+  onMove(move, change, player, rival, field) {
     const turn = this.battle.getTurn();
-    const playerActiveMessage = playerActive.map(item => this.formatPokemonState(item)).join(' / ');
-    const rivalActiveMessage = rivalActive.map(item => this.formatPokemonState(item)).join(' / ');
-    let message = `${id} team: ${playerActiveMessage}\n`;
+    const phase = this.battle.getPhase();
+    const playerActiveMessage = player.active.map(item => this.formatPokemonState(item)).join(' / ');
+    const rivalActiveMessage = rival.active.map(item => this.formatPokemonState(item)).join(' / ');
+    let message = `${player.id} team: ${playerActiveMessage}\n`;
     message += `rival: ${rivalActiveMessage}\n`;
     return this.prompt(message, response => {
       const [type, ...input] = response.split(' ');
       if (type === 'move') {
-        const values = input.map(item => Number.parseInt(item, 10));
-        move(...values);
+        this.requestMove(move, input);
       } else if (type === 'switch') {
-        const values = input.map(item => Number.parseInt(item, 10));
-        change(...values);
+        this.requestSwitch(change, input);
       } else if (type === 'show') {
-        const key = input[0];
-        if (key === 'moves') {
-          this.showMoves(input, playerActive);
-        } else if (key === 'team') {
-          this.showTeam(playerActive, playerPassive);
-        } else if (key === 'field') {
-          throw new Error('Not implemented.');
-        } else if (key === 'state') {
-          throw new Error('Not implemented.');
-        } else if (key === 'pokemon') {
-          throw new Error('Not implemented.');
-        } else if (key === 'help') {
-          this.showHelp();
-        } else {
-          throw new Error('Only moves, team, field, state, pokemon, help are valid options to show.');
-        }
+        this.requestShow(player, rival, field, input);
       } else {
-        throw new Error('Only move and switch are recognized commands');
+        throw new Error('Only move, switch and show are recognized commands');
       }
       if (
-        this.battle.getSlotsMissingAction().find(item => item.id === id) &&
-        turn === this.battle.getTurn()
+        this.battle.getSlotsMissingAction().find(item => item.id === player.id) &&
+        turn === this.battle.getTurn() &&
+        phase === this.battle.getPhase()
       ) {
         return true;
       }
     });
   }
 
-  onForceSwitch(id) {
-    return ;
+  onForceSwitch(change, player, rival, field, forcedSwitches) {
+    let message = `${player.id} must switch out these positions: ${forcedSwitches.join(', ')}`;
+    const playerPassiveMessage = player.passive
+      .filter(state => state !== null)
+      .map(state => this.formatPokemonState(state))
+      .join(' / ');
+    message += `\nTeam: ${playerPassiveMessage}`;
+    return this.prompt(message, response => {
+      const [type, ...input] = response.split(' ');
+      if (type === 'switch') {
+        this.requestSwitch(change, input);
+      } else if (type === 'show') {
+        this.requestShow(player, rival, field, input);
+      } else {
+        throw new Error('Only switch and show are recognized commands');
+      }
+      if (this.battle.hasForcedSwitchesLeft(player.id)) {
+        return true;
+      }
+    });
   }
 
-  onEnd(id) {
+  onEnd() {
     return ;
   }
 }
