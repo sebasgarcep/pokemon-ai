@@ -1,9 +1,18 @@
+
+/**
+ * @typedef {Object} Hooks
+ * @property {Function} onBeforeDamageCalculation
+ * @property {Function} onBeforeDamageApplication
+ * @property {Function} onAfterAttack
+ */
+
 /**
  * @typedef {Object} Item
  * @property {string} id
  * @property {string} name
  * @property {number} num
  * @property {string} desc
+ * @property {Hooks} hooks
  */
 
 /**
@@ -99,6 +108,7 @@
  * @property {string} name
  * @property {number} num
  * @property {string} desc
+ * @property {Hooks} hooks
  */
 
 /**

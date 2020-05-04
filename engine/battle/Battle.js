@@ -12,9 +12,11 @@ const seedrandom = require('seedrandom');
 const range = require('lodash.range');
 const { produce, setAutoFreeze } = require('immer');
 const PokemonStateFactory = require('./PokemonStateFactory');
-const moves = require('../data/moves');
-const pokemon = require('../data/pokemon');
-const typechart = require('../data/typechart');
+const abilityData = require('../data/abilities');
+const itemData = require('../data/items');
+const moveData = require('../data/moves');
+const pokemonData = require('../data/pokemon');
+const typechartData = require('../data/typechart');
 const getBoostedValue = require('../utils/getBoostedValue');
 
 // Setting to avoid mistakes during development and testing.
@@ -231,7 +233,7 @@ class Battle {
       throw new Error(`You must select exactly ${this.format.total} pokemon.`);
     }
     const builds = this.state.players[id].builds;
-    const team = choices.map(index => PokemonStateFactory.create(builds[index - 1]));
+    const team = choices.map(index => PokemonStateFactory.create(id, builds[index - 1]));
     const active = team.slice(0, this.format.active);
     const passive = [
       ...team.slice(this.format.active, this.format.total),
@@ -311,16 +313,17 @@ class Battle {
     this.updateState(state => {
       // Move is Valid checks
       const moveState = this.getMove(state, id, 'active', activePos, movePos);
+      const move = moveData[moveState.id];
       if (!moveState) { throw new Error('There is no move in this slot.'); }
       if (moveState.disabled) { throw new Error('This move has been disabled.'); }
       if (moveState.pp === 0) { throw new Error('There is no PP left in this move.'); }
       // FIXME: Add Target types valid check
-      if (moveState.target === 'normal') {
+      if (move.target === 'normal') {
         if (targetPos <= 0) { throw new Error('You must choose a foe\'s position.'); }
-      } else if (moveState.target === 'allAdjacentFoes') {
+      } else if (move.target === 'allAdjacentFoes') {
         targetPos = 0;
       } else {
-        throw new Error(`Unrecognized target type: ${moveState.target}.`);
+        throw new Error(`Unrecognized target type: ${move.target}.`);
       }
       /** @type {MoveAction} */
       const action = { type: 'move', move: movePos, target: targetPos };
@@ -650,6 +653,75 @@ class Battle {
     return targetPositions;
   }
 
+  getAccuracy(state, id, pos, move, targetId, targetPos) {
+    if (move.accuracy === true) {
+      return 100;
+    }
+    const accuracyBoost = this.getBoost(state, id, pos, 'accuracy');
+    const evasionBoost = this.getBoost(state, targetId, targetPos, 'evasion');
+    const boost = Math.max(-6, Math.min(6, accuracyBoost - evasionBoost));
+    const accuracy = getBoostedValue('accuracy', boost, move.accuracy);
+    // FIXME: add accuracy modifications
+    return accuracy;
+  }
+
+  getDamage(state, id, pos, active, move, targetId, targetPos, target) {
+    if (move.category === 'status') {
+      // FIXME: does not damage
+      return null;
+    }
+    const level = active.build.level;
+    /** @type {'atk' | 'spa'} */
+    const offenseKey = move.category === 'physical' ? 'atk' : 'spa';
+    /** @type {'def' | 'spd'} */
+    const defenseKey = move.category === 'physical' ? 'def' : 'spd';
+    const offenseStat = this.getBoostedStat(state, id, pos, offenseKey);
+    const defenseStat = this.getBoostedStat(state, targetId, targetPos, defenseKey);
+    // STAB
+    const stabModifier = pokemonData[active.build.species].types.includes(move.type);
+    /*
+    FIXME: add these to damage calculation
+    if (typeModifier === null) {
+      return null;
+    }
+    */
+    // Type Effectiveness
+    const typeModifier = pokemonData[target.build.species].types.reduce((acc, type) => {
+      const modifier = typechartData[type][move.type];
+      if (acc == null || modifier === null) { return null; }
+      return acc + modifier;
+    }, 0);
+    if (typeModifier === null) {
+      // FIXME: Move is not effective.
+      return null;
+    }
+    // Random Modifier
+    const randomModifier = this.getRandom(state, 85, 100);
+    const opts = {
+      level,
+      offenseKey,
+      defenseKey,
+      offenseStat,
+      defenseStat,
+      power: move.basePower,
+      stabModifier,
+      typeModifier,
+      randomModifier,
+      move,
+      active,
+      target,
+      damage: null,
+    };
+    this.triggerHooks('onBeforeDamageCalculation', state, opts);
+    opts.damage = (((2 * opts.level / 5 + 2) * opts.power * opts.offenseStat / opts.defenseStat) / 50 + 2);
+    if (stabModifier) { opts.damage *= 1.5; }
+    opts.damage *= Math.pow(2, opts.typeModifier);
+    opts.damage = Math.max(1, Math.floor(opts.damage));
+    opts.damage *= opts.randomModifier / 100;
+    // FIXME: implement other modifiers (Crit, Hooks, etc.)
+    return opts;
+  }
+
   /**
    * @param {string} id
    * @param {number} pos
@@ -663,67 +735,31 @@ class Battle {
       // FIXME: update PP
       // @ts-ignore
       const moveState = this.getMove(state, id, 'active', pos, action.move);
-      const move = moves[moveState.id];
+      const move = moveData[moveState.id];
       // Get Targets
-      const targetPositions = this.getTargetPositions(state, id, moveState.target, action.target);
+      const targetPositions = this.getTargetPositions(state, id, move.target, action.target);
       // Execute each move
       const active = this.getPokemon(state, id, 'active', pos);
       for (const { id: targetId, pos: targetPos } of targetPositions) {
-        let accuracy;
-        if (move.accuracy === true) {
-          accuracy = 100;
-        } else {
-          const accuracyBoost = this.getBoost(state, id, pos, 'accuracy');
-          const evasionBoost = this.getBoost(state, targetId, targetPos, 'evasion');
-          const boost = Math.max(-6, Math.min(6, accuracyBoost - evasionBoost));
-          accuracy = getBoostedValue('accuracy', boost, move.accuracy);
-        }
-        // FIXME: add accuracy modifications
+        const accuracy = this.getAccuracy(state, id, pos, move, targetId, targetPos);
         const hitValue = this.getRandom(state, 1, 100);
         if (hitValue > accuracy) {
           // FIXME: hit misses
           continue;
         }
-        if (move.category === 'status') {
-          // FIXME: does not damage
-          continue;
-        }
-        const level = active.build.level;
-        /** @type {'atk' | 'spa'} */
-        let offenseKey = move.category === 'physical' ? 'atk' : 'spa';
-        /** @type {'def' | 'spd'} */
-        let defenseKey = move.category === 'physical' ? 'def' : 'spd';
-        const offenseStat = this.getBoostedStat(state, id, pos, offenseKey);
-        const defenseStat = this.getBoostedStat(state, targetId, targetPos, defenseKey);
-        let damage = (((2 * level / 5 + 2) * move.basePower * offenseStat / defenseStat) / 50 + 2);
         const target = this.getPokemon(state, targetId, 'active', targetPos);
-        // STAB
-        const stabModifier = pokemon[active.build.species].types.includes(move.type);
-        if (stabModifier) {
-          damage *= 1.5;
+        const damageOpts = this.getDamage(state, id, pos, active, move, targetId, targetPos, target);
+        if (damageOpts !== null) {
+          this.triggerHooks('onBeforeDamageApplication', state, damageOpts);
+          target.hp = Math.max(0, target.hp - damageOpts.damage);
         }
-        // Type Effectiveness
-        const typeModifier = pokemon[target.build.species].types.reduce((acc, type) => {
-          const modifier = typechart[type][move.type];
-          if (acc == null || modifier === null) { return null; }
-          return acc + modifier;
-        }, 0);
-        if (typeModifier === null) {
-          // FIXME: Move is not effective.
-          continue;
-        }
-        damage *= Math.pow(2, typeModifier);
-        // Random Modifier
-        const randomModifier = this.getRandom(state, 85, 100);
-        damage *= randomModifier / 100;
-        // FIXME: implement other modifiers
-        damage = Math.max(1, Math.floor(damage));
-        target.hp = Math.max(0, target.hp - damage);
-        this.setPokemon(state, targetId, 'active', targetPos, target);
         if (target.hp > 0) {
           // FIXME: trigger secondary effects
         } else {
           this.executeSwitch(state, targetId, targetPos, 0);
+        }
+        if (damageOpts !== null) {
+          this.triggerHooks('onAfterAttack', state, damageOpts);
         }
       }
       this.clearAction(state, id, pos);
@@ -778,7 +814,7 @@ class Battle {
           const action = this.getAction(state, item.id, item.pos);
           if (!action || action.type !== 'move') { return null; }
           const { id: moveId } = this.getMove(state, item.id, 'active', item.pos, action.move);
-          const priority = moves[moveId].priority;
+          const priority = moveData[moveId].priority;
           const speed = this.getBoostedStat(state, item.id, item.pos, 'spe');
           // FIXME: do some speed modifications here, like trick room
           return { ...item, priority, speed };
@@ -787,6 +823,33 @@ class Battle {
         .sort((a, b) => a.priority === b.priority ? b.speed - a.speed : b.priority - a.priority);
       state.order = order;
     });
+  }
+
+  /**
+   * Triggers all hooks of a given type.
+   * @param {string} hookName
+   * @param {State} state
+   * @param  {any[]} args
+   */
+  triggerHooks(hookName, state, ...args) {
+    // Field
+    // FIXME: do this
+    const activePositions = this.getActivePositions();
+    // FIXME: use speed order
+    for (const { id, pos } of activePositions) {
+      const entity = this.getPokemon(state, id, 'active', pos);
+      if (!entity) { continue; }
+      // Abilities
+      const abilityHook = abilityData[entity.ability].hooks[hookName];
+      if (abilityHook) { abilityHook(state, entity, ...args); }
+      // Items
+      const itemHook = itemData[entity.item.id].hooks[hookName];
+      if (itemHook) { itemHook(state, entity, ...args); }
+      // Status Conditions
+      // FIXME: implement this
+      // Volatiles
+      // FIXME: implement this
+    }
   }
 }
 

@@ -1,6 +1,5 @@
 const pokemon = require('../data/pokemon');
 const natures = require('../data/natures');
-const moves = require('../data/moves');
 
 class PokemonStateFactory {
   static getStats(build) {
@@ -30,20 +29,20 @@ class PokemonStateFactory {
       id: item.id,
       pp: item.pp,
       maxpp: item.pp,
-      target: moves[item.id].target,
       disabled: false,
     }));
   }
 
-  static create(build) {
+  static create(id, build) {
     const moves = PokemonStateFactory.getMoves(build);
     const stats = PokemonStateFactory.getStats(build);
     return {
+      id: `${id}: ${build.species}`,
       build,
       moves,
       ability: build.ability,
       stats,
-      item: build.item,
+      item: { id: build.item, uses: 0 },
       hp: stats.hp,
       maxhp: stats.hp,
       boosts: { atk: 0, def: 0, spa: 0, spd: 0, spe: 0, accuracy: 0, evasion: 0 },
