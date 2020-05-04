@@ -20,6 +20,7 @@ const getBoostedValue = require('../utils/getBoostedValue');
  */
 const initalState = fromJS({
   phase: 'setplayers',
+  turn: 0,
   players: {},
   field: null,
   order: [],
@@ -81,6 +82,7 @@ class Battle {
     const rng = seedrandom('', { state:seed });
     const value = rng();
     const range = max - min + 1;
+    this.setState(['seed'], rng.state());
     return Math.floor(range * value) + min;
   }
 
@@ -88,8 +90,17 @@ class Battle {
     return Object.keys(this.hooks);
   }
 
+  /**
+   * Gets the rival's id for a given player id.
+   * @param {string} id
+   * @return {string}
+   */
   getRivalId(id) {
     return this.getIds().find(item => item !== id);
+  }
+
+  getTurn() {
+    return this.getState(['turn']);
   }
 
   /**
@@ -210,6 +221,7 @@ class Battle {
    */
   triggerOnMove() {
     this.setPhase('choice');
+    this.setState(['turn'], this.getTurn() + 1);
     const ids = this.getIds();
     for (const playerId of ids) {
       const rivalId = this.getRivalId(playerId);
@@ -335,7 +347,7 @@ class Battle {
   }
 
   clearAction(id, pos) {
-    return this.setPlayerState(id, ['actions', pos], null);
+    return this.setPlayerState(id, ['actions', pos - 1], null);
   }
 
   /**
@@ -428,9 +440,11 @@ class Battle {
   }
 
   performMoveActions() {
-    while (this.getSlotsMissingAction().length > 0) {
+    while (this.getSlotsContainingAction().length > 0) {
       this.setOrder();
-      const [{ id, pos }] = this.getState(['order']);
+      const order = this.getState(['order']);
+      if (order.length === 0) { break; }
+      const [{ id, pos }] = order;
       this.executeMoveAction(id, pos);
     }
   }
@@ -488,7 +502,7 @@ class Battle {
     // FIXME: update PP
     const moveState = this.getMove(id, 'active', pos, action.move);
     const move = moves[moveState.id];
-    const rivalId = this.getRivalId();
+    const rivalId = this.getRivalId(id);
     // Get Targets
     const targetPositions = [];
     if (moveState.target === 'normal') {
@@ -504,7 +518,7 @@ class Battle {
       } else {
         const accuracyBoost = this.getBoost(id, pos, 'accuracy');
         const evasionBoost = this.getBoost(targetId, targetPos, 'evasion');
-        const boost = Math.min(-6, Math.max(6, accuracyBoost - evasionBoost));
+        const boost = Math.max(-6, Math.min(6, accuracyBoost - evasionBoost));
         accuracy = getBoostedValue('accuracy', boost, move.accuracy);
       }
       // FIXME: add accuracy modifications
@@ -528,7 +542,7 @@ class Battle {
       // FIXME: implement other modifiers
       damage = Math.floor(damage);
       const target = this.getPokemon(targetId, 'active', targetPos);
-      target.hp = Math.min(0, target.hp - damage);
+      target.hp = Math.max(0, target.hp - damage);
       this.setPokemon(targetId, 'active', targetPos, target);
       if (target.hp > 0) {
         // FIXME: trigger secondary effects
@@ -541,25 +555,45 @@ class Battle {
   }
 
   /**
+   * Gets all active slots containing an action.
+   */
+  getSlotsContainingAction() {
+    return this.getActiveIds()
+      .filter(({ id, pos }) => {
+        return this.getAction(id, pos) !== null;
+      });
+  }
+
+  /**
    * Gets all active slots missing an action.
    */
   getSlotsMissingAction() {
     return this.getActiveIds()
       .filter(({ id, pos }) => {
-        return this.getAction(id, pos) == null;
+        return this.getAction(id, pos) === null;
       });
   }
 
   /**
-   * Sets a move order for the Pokemon let to move.
+   * Gets all active positions currently occupied.
+   */
+  getOccupiedActivePositions() {
+    return this.getActiveIds()
+      .filter(({ id, pos }) => !!this.getPokemon(id, 'active', pos));
+  }
+
+  // FIXME: this should set the move order according to speed.
+  // Priority ties should be handled elsewhere.
+  /**
+   * Sets a move order for the Pokemon left to move.
    */
   setOrder() {
-    const activeIds = this.getActiveIds();
+    const activeIds = this.getOccupiedActivePositions();
     const order = activeIds
       .map(item => {
         const action = this.getAction(item.id, item.pos);
         if (!action || action.type !== 'move') { return null; }
-        const { id: moveId } = this.getMove(item.id, 'active', item.pos, action.movePos);
+        const { id: moveId } = this.getMove(item.id, 'active', item.pos, action.move);
         const priority = moves[moveId].priority;
         const speed = this.getBoostedStat(item.id, item.pos, 'spe');
         // FIXME: do some speed modifications here, like trick room

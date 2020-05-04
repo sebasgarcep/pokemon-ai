@@ -124,6 +124,7 @@ class TerminalGame {
   }
 
   onMove(id, move, change, playerActive, playerPassive, rivalActive, rivalPassive, field) {
+    const turn = this.battle.getTurn();
     const playerActiveMessage = playerActive.map(item => this.formatPokemonState(item)).join(' / ');
     const rivalActiveMessage = rivalActive.map(item => this.formatPokemonState(item)).join(' / ');
     let message = `${id} team: ${playerActiveMessage}\n`;
@@ -156,7 +157,10 @@ class TerminalGame {
       } else {
         throw new Error('Only move and switch are recognized commands');
       }
-      if (this.battle.getSlotsMissingAction().find(item => item.id === id)) {
+      if (
+        this.battle.getSlotsMissingAction().find(item => item.id === id) &&
+        turn === this.battle.getTurn()
+      ) {
         return true;
       }
     });
