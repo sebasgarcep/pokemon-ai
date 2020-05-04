@@ -498,20 +498,36 @@ class Battle {
    * @param {number} passivePos
    */
   executeSwitch(state, id, activePos, passivePos) {
+    if (passivePos === 0) { passivePos = this.getFirstEmptyPassivePosition(state, id); }
     const active = this.getPokemon(state, id, 'active', activePos);
     const passive = this.getPokemon(state, id, 'passive', passivePos);
     // FIXME: do some cleanup like clear volatiles, boosts, etc.
     this.setPokemon(state, id, 'active', activePos, passive);
     this.setPokemon(state, id, 'passive', passivePos, active);
+    state.players[id].passive.sort((a, b) => {
+      if ((a === null && b === null) || (a !== null && b !== null)) {
+        return 0;
+      } else if (a === null) {
+        return 1;
+      } else {
+        return -1;
+      }
+    });
   }
 
-  getFirstEmptyPassivePosition(id) {
+  /**
+   * Gets the number for the first unoccupied passive position.
+   * @param {State} state
+   * @param {string} id
+   */
+  getFirstEmptyPassivePosition(state, id) {
+    state = state || this.state;
     for (const pos of range(1, this.format.total)) {
-      if (this.state.players[id].passive[pos - 1] === null) {
+      if (state.players[id].passive[pos - 1] === null) {
         return pos;
       }
     }
-    throw new Error('This should not happen');
+    return null;
   }
 
   /**
@@ -707,8 +723,7 @@ class Battle {
         if (target.hp > 0) {
           // FIXME: trigger secondary effects
         } else {
-          const swithoutPos = this.getFirstEmptyPassivePosition(targetId);
-          this.executeSwitch(state, targetId, targetPos, swithoutPos);
+          this.executeSwitch(state, targetId, targetPos, 0);
         }
       }
       this.clearAction(state, id, pos);
