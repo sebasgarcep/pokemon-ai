@@ -11,8 +11,10 @@
 const seedrandom = require('seedrandom');
 const range = require('lodash.range');
 const { produce, setAutoFreeze } = require('immer');
-const PokemonState = require('./PokemonState');
+const PokemonStateFactory = require('./PokemonStateFactory');
 const moves = require('../data/moves');
+const pokemon = require('../data/pokemon');
+const typechart = require('../data/typechart');
 const getBoostedValue = require('../utils/getBoostedValue');
 
 // Setting to avoid mistakes during development and testing.
@@ -132,15 +134,20 @@ class Battle {
     });
   }
 
-  getRandom(min, max) {
-    const { seed } = this.state;
+  /**
+   * Gets a random integer in the range [min, max].
+   * @param {State} state
+   * @param {number} min
+   * @param {number} max
+   * @returns {number}
+   */
+  getRandom(state, min, max) {
+    const { seed } = state;
     if (seed === null) { throw new Error('Seed has not been initialized,'); }
     const rng = seedrandom('', { state:seed });
     const value = rng();
     const range = max - min + 1;
-    this.updateState(state => {
-      state.seed = seed;
-    });
+    state.seed = seed;
     return Math.floor(range * value) + min;
   }
 
@@ -224,10 +231,10 @@ class Battle {
       throw new Error(`You must select exactly ${this.format.total} pokemon.`);
     }
     const builds = this.state.players[id].builds;
-    const pokemon = choices.map(index => PokemonState.create(builds[index - 1]));
-    const active = pokemon.slice(0, this.format.active);
+    const team = choices.map(index => PokemonStateFactory.create(builds[index - 1]));
+    const active = team.slice(0, this.format.active);
     const passive = [
-      ...pokemon.slice(this.format.active, this.format.total),
+      ...team.slice(this.format.active, this.format.total),
       ...range(this.format.active).map(() => null),
     ];
     this.updateState(state => {
@@ -375,9 +382,10 @@ class Battle {
    * @param {string} id
    * @param {'active' | 'passive'} location
    * @param {number} pos
+   * @param {any} data
    */
-  setPokemon(state, id, location, pos, pokemon) {
-    state.players[id][location][pos - 1] = pokemon;
+  setPokemon(state, id, location, pos, data) {
+    state.players[id][location][pos - 1] = data;
   }
 
   /**
@@ -558,9 +566,8 @@ class Battle {
         state.players[id].forcedSwitches = forcedSwitches;
       }
     });
-    const ids = this.getIds();
-    const startNextTurn = ids.find(id => this.state.players[id].forcedSwitches.length > 0) === undefined;
-    if (startNextTurn) {
+    const ids = this.getIds().filter(id => this.state.players[id].forcedSwitches.length > 0);
+    if (ids.length === 0) {
       this.finishForcedSwitches();
     } else {
       for (const id of ids) {
@@ -632,7 +639,7 @@ class Battle {
           accuracy = getBoostedValue('accuracy', boost, move.accuracy);
         }
         // FIXME: add accuracy modifications
-        const hitValue = this.getRandom(1, 100);
+        const hitValue = this.getRandom(state, 1, 100);
         if (hitValue > accuracy) {
           // FIXME: hit misses
           continue;
@@ -649,9 +656,28 @@ class Battle {
         const offenseStat = this.getBoostedStat(state, id, pos, offenseKey);
         const defenseStat = this.getBoostedStat(state, targetId, targetPos, defenseKey);
         let damage = (((2 * level / 5 + 2) * move.basePower * offenseStat / defenseStat) / 50 + 2);
-        // FIXME: implement other modifiers
-        damage = Math.floor(damage);
         const target = this.getPokemon(state, targetId, 'active', targetPos);
+        // STAB
+        const stabModifier = pokemon[active.build.species].types.includes(move.type);
+        if (stabModifier) {
+          damage *= 1.5;
+        }
+        // Type Effectiveness
+        const typeModifier = pokemon[target.build.species].types.reduce((acc, type) => {
+          const modifier = typechart[type][move.type];
+          if (acc == null || modifier === null) { return null; }
+          return acc + modifier;
+        }, 0);
+        if (typeModifier === null) {
+          // FIXME: Move is not effective.
+          continue;
+        }
+        damage *= Math.pow(2, typeModifier);
+        // Random Modifier
+        const randomModifier = this.getRandom(state, 85, 100);
+        damage *= randomModifier / 100;
+        // FIXME: implement other modifiers
+        damage = Math.max(1, Math.floor(damage));
         target.hp = Math.max(0, target.hp - damage);
         this.setPokemon(state, targetId, 'active', targetPos, target);
         if (target.hp > 0) {
@@ -701,8 +727,7 @@ class Battle {
       .filter(({ id, pos }) => !!this.getPokemon(state, id, 'active', pos));
   }
 
-  // FIXME: this should set the move order according to speed.
-  // Priority ties should be handled elsewhere.
+  // FIXME: this should set the move order according to speed. Priority ties should be handled elsewhere. Speed ties should be handled randomly.
   /**
    * Sets a move order for the Pokemon left to move.
    */

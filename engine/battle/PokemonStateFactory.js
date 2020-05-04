@@ -2,7 +2,7 @@ const pokemon = require('../data/pokemon');
 const natures = require('../data/natures');
 const moves = require('../data/moves');
 
-class PokemonState {
+class PokemonStateFactory {
   static getStats(build) {
     const { level, ivs, evs, nature, species } = build;
     const { baseStats } = pokemon[species];
@@ -36,8 +36,8 @@ class PokemonState {
   }
 
   static create(build) {
-    const moves = PokemonState.getMoves(build);
-    const stats = PokemonState.getStats(build);
+    const moves = PokemonStateFactory.getMoves(build);
+    const stats = PokemonStateFactory.getStats(build);
     return {
       build,
       moves,
@@ -53,4 +53,4 @@ class PokemonState {
   }
 }
 
-module.exports = PokemonState;
+module.exports = PokemonStateFactory;
