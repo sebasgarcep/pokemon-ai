@@ -317,6 +317,8 @@ class Battle {
       // FIXME: Add Target types valid check
       if (moveState.target === 'normal') {
         if (targetPos <= 0) { throw new Error('You must choose a foe\'s position.'); }
+      } else if (moveState.target === 'allAdjacentFoes') {
+        targetPos = 0;
       } else {
         throw new Error(`Unrecognized target type: ${moveState.target}.`);
       }
@@ -606,6 +608,33 @@ class Battle {
   }
 
   /**
+   * Gets all target positions targeted by a move.
+   * @param {State} state
+   * @param {string} id
+   * @param {string} target
+   * @param {number} pos
+   * @returns {Position[]}
+   */
+  getTargetPositions(state, id, target, pos) {
+    const targetPositions = [];
+    const rivalId = this.getRivalId(id);
+    if (target === 'normal') {
+      if (this.getPokemon(state, rivalId, 'active', pos)) {
+        targetPositions.push({ id: rivalId, pos });
+      } else {
+        targetPositions.push({ id: rivalId, pos: 3 - pos });
+      }
+    } else if (target === 'allAdjacentFoes') {
+      for (const activePos of range(1, this.format.total + 1)) {
+        if (this.getPokemon(state, rivalId, 'active', activePos)) {
+          targetPositions.push({ id: rivalId, pos: activePos });
+        }
+      }
+    }
+    return targetPositions;
+  }
+
+  /**
    * @param {string} id
    * @param {number} pos
    */
@@ -619,13 +648,8 @@ class Battle {
       // @ts-ignore
       const moveState = this.getMove(state, id, 'active', pos, action.move);
       const move = moves[moveState.id];
-      const rivalId = this.getRivalId(id);
       // Get Targets
-      const targetPositions = [];
-      if (moveState.target === 'normal') {
-        // FIXME: if target has fainted then target must be replaced
-        targetPositions.push({ id: rivalId, pos: action.target });
-      }
+      const targetPositions = this.getTargetPositions(state, id, moveState.target, action.target);
       // Execute each move
       const active = this.getPokemon(state, id, 'active', pos);
       for (const { id: targetId, pos: targetPos } of targetPositions) {
