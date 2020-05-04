@@ -153,8 +153,8 @@ class TerminalGame {
   }
 
   onMove(move, change, player, rival, field) {
-    const turn = this.battle.getTurn();
-    const phase = this.battle.getPhase();
+    const turn = this.battle.getTurn(null);
+    const phase = this.battle.getPhase(null);
     const playerActiveMessage = player.active.map(item => this.formatPokemonState(item)).join(' / ');
     const rivalActiveMessage = rival.active.map(item => this.formatPokemonState(item)).join(' / ');
     let message = `${player.id} team: ${playerActiveMessage}\n`;
@@ -171,9 +171,9 @@ class TerminalGame {
         throw new Error('Only move, switch and show are recognized commands');
       }
       if (
-        this.battle.getSlotsMissingAction().find(item => item.id === player.id) &&
-        turn === this.battle.getTurn() &&
-        phase === this.battle.getPhase()
+        this.battle.getSlotsMissingAction(null).find(item => item.id === player.id) &&
+        turn === this.battle.getTurn(null) &&
+        phase === this.battle.getPhase(null)
       ) {
         return true;
       }
