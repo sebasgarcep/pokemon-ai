@@ -7,7 +7,7 @@ class PokemonState {
     const { level, ivs, evs, nature, species } = build;
     const { baseStats } = pokemon[species];
     const stats = {};
-    for (const key in Object.keys(baseStats)) {
+    for (const key of Object.keys(baseStats)) {
       if (key === 'hp') {
         stats[key] = Math.floor((2 * baseStats[key] + ivs[key] + Math.floor(evs[key] / 4)) * level / 100) + level + 10;
       } else {

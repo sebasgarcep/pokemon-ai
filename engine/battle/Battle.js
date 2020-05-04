@@ -47,7 +47,7 @@ class Battle {
     }
   }
 
-  setPlayer(id, team, onTeamPreview, onMove, onForceSwitch, onEnd) {
+  setPlayer(id, builds, onTeamPreview, onMove, onForceSwitch, onEnd) {
     if (this.getIds().length >= 2) { throw new Error('Cannot set more than two players.'); }
 
     const opts = {
@@ -61,7 +61,7 @@ class Battle {
 
     this.setPlayerState(id, [], {
       id,
-      team,
+      builds,
       active: null,
       passive: null,
       actions: null,
@@ -152,9 +152,9 @@ class Battle {
     if (ids.length < 2) { throw new Error('Both players must be set for the battle to begin.'); }
     this.setPhase('teampreview');
     for (const playerId of ids) {
-      const playerTeam = this.getPlayerState(playerId, ['team']);
+      const playerTeam = this.getPlayerState(playerId, ['builds']);
       const rivalId = this.getRivalId(playerId);
-      const rivalTeam = this.getPlayerState(rivalId, ['team'])
+      const rivalTeam = this.getPlayerState(rivalId, ['builds'])
         .map(item => ({ species: item.species, gender: item.gender }));
       this.hooks[playerId].onTeamPreview(playerTeam, rivalTeam);
     }
@@ -165,11 +165,11 @@ class Battle {
     if (choices.length !== this.format.total) {
       throw new Error(`You must select exactly ${this.format.total} pokemon.`);
     }
-    const team = this.getPlayerState(id, ['team']);
-    const pokemon = choices.map(index => PokemonState.create(team[index - 1]));
+    const builds = this.getPlayerState(id, ['builds']);
+    const pokemon = choices.map(index => PokemonState.create(builds[index - 1]));
     const active = pokemon.slice(0, this.format.active);
     const passive = [
-      ...pokemon.slice(this.format.active, this.format.total - this.format.active),
+      ...pokemon.slice(this.format.active, this.format.total),
       ...range(this.format.active).map(() => null),
     ];
     this.setPlayerState(id, ['active'], active);
@@ -188,7 +188,21 @@ class Battle {
    */
   beginBattle() {
     this.seedRandom();
+    this.initializeField();
     this.triggerOnMove();
+  }
+
+  initializeField() {
+    const global = {};
+    const sides = this.getIds()
+      .reduce((item, id) => {
+        item[id] = {};
+        return item;
+      }, {});
+    this.setState(['field'], {
+      global,
+      sides,
+    });
   }
 
   /**
@@ -200,8 +214,12 @@ class Battle {
     for (const playerId of ids) {
       const rivalId = this.getRivalId(playerId);
       const playerActive = this.getPlayerState(playerId, ['active']);
-      const rivalActive = this.getPlayerState(rivalId, ['active']);
-      this.hooks[playerId].onMove();
+      const playerPassive = this.getPlayerState(playerId, ['passive']);
+      const rivalActive = this.getPlayerState(rivalId, ['active'])
+        .map(item => ({ ...item, hp: Math.ceil( item.hp * 48 / item.maxhp ), maxhp: 48 }));
+      const rivalPassive = []; // FIXME: Only show Pokemon that have come out, otherwise set to null or something else.
+      const field = this.getState(['field']);
+      this.hooks[playerId].onMove(playerActive, playerPassive, rivalActive, rivalPassive, field);
     }
   }
 
@@ -312,7 +330,7 @@ class Battle {
   }
 
   setAction(id, pos, action) {
-    this.setPlayerState(id, ['active', pos - 1], action);
+    this.setPlayerState(id, ['actions', pos - 1], action);
     this.commit();
   }
 
@@ -320,6 +338,10 @@ class Battle {
     return this.setPlayerState(id, ['actions', pos], null);
   }
 
+  /**
+   * Gets all active positions.
+   * @return {{ id: string, pos: number }[]}
+   */
   getActiveIds() {
     const ids = this.getIds();
     const activeIds = [];
@@ -332,11 +354,8 @@ class Battle {
   }
 
   commit() {
-    const activeIds = this.getActiveIds();
     // Check if commands are complete
-    for (const { id, pos } of activeIds) {
-      if (this.getAction(id, pos) === null) { return; }
-    }
+    if (this.getSlotsMissingAction().length > 0) { return; }
     // Execute commands
     this.setPhase('run');
     this.runActions();
@@ -409,7 +428,7 @@ class Battle {
   }
 
   performMoveActions() {
-    while (this.missingAnyAction()) {
+    while (this.getSlotsMissingAction().length > 0) {
       this.setOrder();
       const [{ id, pos }] = this.getState(['order']);
       this.executeMoveAction(id, pos);
@@ -521,12 +540,14 @@ class Battle {
     this.clearAction(id, pos);
   }
 
-  missingAnyAction() {
-    const activeIds = this.getActiveIds();
-    for (const { id, pos } of activeIds) {
-      if (this.getAction(id, pos) !== null) { return true; }
-    }
-    return false;
+  /**
+   * Gets all active slots missing an action.
+   */
+  getSlotsMissingAction() {
+    return this.getActiveIds()
+      .filter(({ id, pos }) => {
+        return this.getAction(id, pos) == null;
+      });
   }
 
   /**
