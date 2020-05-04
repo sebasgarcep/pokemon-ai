@@ -108,6 +108,21 @@ class TerminalGame {
     }
   }
 
+  showHelp() {
+    const message = [
+      'Options:',
+      '    move <active pokemon slot> <move slot> <target slot>   -- Chooses a move for an active Pokemon.',
+      '    switch <active pokemon slot> <passive pokemon slot>    -- Chooses a switch for an active Pokemon.',
+      '    show moves <active pokemon slot>                       -- Shows the state of all moves on an active Pokemon.',
+      '    show team                                              -- Show the complete team of the current player.',
+      '    show field                                             -- Shows the current state of the field.',
+      '    show state <active pokemon slot>                       -- Shows the current complete state of an active Pokemon.',
+      '    show pokemon                                           -- Show a preview for all Pokemon in the current game (both player and foe).',
+      '    show help                                              -- Shows this information.'
+    ].join('\n');
+    console.log(message);
+  }
+
   onMove(id, move, change, playerActive, playerPassive, rivalActive, rivalPassive, field) {
     const playerActiveMessage = playerActive.map(item => this.formatPokemonState(item)).join(' / ');
     const rivalActiveMessage = rivalActive.map(item => this.formatPokemonState(item)).join(' / ');
@@ -133,8 +148,10 @@ class TerminalGame {
           throw new Error('Not implemented.');
         } else if (key === 'pokemon') {
           throw new Error('Not implemented.');
+        } else if (key === 'help') {
+          this.showHelp();
         } else {
-          throw new Error('Only moves, team, field, state, and pokemon are valid options to show.');
+          throw new Error('Only moves, team, field, state, pokemon, help are valid options to show.');
         }
       } else {
         throw new Error('Only move and switch are recognized commands');
