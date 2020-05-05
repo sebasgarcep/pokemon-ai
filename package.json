@@ -1,13 +1,12 @@
 {
   "name": "pokemon-ai",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "0.0.1",
+  "main": "src/index.js",
   "author": "Sebastian Garrido <sebgar@gascaribe.com>",
   "license": "MIT",
   "scripts": {
     "import-simulator": "node bin/import-simulator.js",
-    "start": "node src/index.js",
-    "terminal-game": "node examples/terminal-game/index.js"
+    "start": "node src/index.js"
   },
   "devDependencies": {
     "bent": "7.3.0",
@@ -15,10 +14,6 @@
     "rimraf": "3.0.2"
   },
   "dependencies": {
-    "fs-extra": "9.0.0",
-    "immer": "6.0.3",
-    "lodash.omit": "4.5.0",
-    "lodash.range": "3.2.0",
-    "seedrandom": "3.0.5"
+    "fs-extra": "9.0.0"
   }
 }
